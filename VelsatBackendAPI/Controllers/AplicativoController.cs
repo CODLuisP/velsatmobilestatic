@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using VelsatBackendAPI.Data.Repositories;
+using VelsatMobile.Data.Repositories;
+using VelsatMobile.Model;
 
 namespace VelsatMobile.Controllers
 {
@@ -7,109 +9,13 @@ namespace VelsatMobile.Controllers
     [ApiController]
     public class AplicativoController : Controller
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IReadOnlyUnitOfWork _readOnlyUow;  // ✅ Para GET
+        private readonly IUnitOfWork _uow;
 
-        public AplicativoController(IUnitOfWork unitOfWork)
+        public AplicativoController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow)
         {
-            _unitOfWork = unitOfWork;
-        }
-
-        [HttpGet("notifications/{accountID}")]
-        public async Task<IActionResult> GetNotifications(string accountID)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(accountID))
-                {
-                    return BadRequest("El accountID es requerido");
-                }
-
-                var notifications = await _unitOfWork.AplicativoRepository.GetNotifications(accountID);
-
-                if (notifications == null || !notifications.Any())
-                {
-                    return NotFound("No se encontraron notificaciones para el día de hoy");
-                }
-
-                return Ok(notifications);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
-            }
-        }
-
-        [HttpGet("kilometers/{deviceID}")]
-        public async Task<IActionResult> GetKilometersDay(string deviceID)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(deviceID))
-                {
-                    return BadRequest("El deviceID es requerido");
-                }
-
-                var kilometers = await _unitOfWork.AplicativoRepository.GetKilometersDay(deviceID);
-
-                return Ok(new
-                {
-                    kilometersToday = kilometers,
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
-            }
-        }
-
-        [HttpGet("notifications/{accountID}/{deviceID}")]
-        public async Task<IActionResult> GetNotifDevice(string accountID, string deviceID)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(accountID) || string.IsNullOrWhiteSpace(deviceID))
-                {
-                    return BadRequest("El accountID y deviceID es requerido");
-                }
-
-                var notifications = await _unitOfWork.AplicativoRepository.GetNotifDevice(accountID, deviceID);
-
-                if (notifications == null || !notifications.Any())
-                {
-                    return NotFound("No se encontraron notificaciones para el día de hoy");
-                }
-
-                return Ok(notifications);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
-            }
-        }
-
-        [HttpGet("vehiculo/{login}/{placa}")]
-        public async Task<IActionResult> ObtenerDatosVehiculo(string login, string placa)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(placa))
-                {
-                    return BadRequest("El login y la placa son requeridos");
-                }
-
-                var datosVehiculo = await _unitOfWork.DatosCargainicialService.ObtenerDatosVehiculoAsync(login, placa);
-
-                if (datosVehiculo.Vehiculo == null)
-                {
-                    return NotFound("No se encontró el vehículo o no pertenece al usuario");
-                }
-
-                return Ok(datosVehiculo);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
-            }
+            _readOnlyUow = readOnlyUow;
+            _uow = uow;
         }
 
         [HttpGet("serviciosPasajero/{codcliente}")]
@@ -122,11 +28,11 @@ namespace VelsatMobile.Controllers
                     return BadRequest("El código de cliente es requerido");
                 }
 
-                var servicios = await _unitOfWork.AplicativoRepository.ServiciosPasajeros(codcliente);
+                var servicios = await _readOnlyUow.AplicativoRepository.ServiciosPasajeros(codcliente);
 
                 if (servicios == null || !servicios.Any())
                 {
-                    return NotFound("No se encontraron servicios para el día de hoy");
+                    return Ok("No se encontraron servicios para el día de hoy");
                 }
 
                 return Ok(servicios);
@@ -147,11 +53,11 @@ namespace VelsatMobile.Controllers
                     return BadRequest("El código de cliente es requerido");
                 }
 
-                var destinos = await _unitOfWork.AplicativoRepository.GetDetalleDestino(codcliente);
+                var destinos = await _readOnlyUow.AplicativoRepository.GetDetalleDestino(codcliente);
 
                 if (destinos == null || !destinos.Any())
                 {
-                    return NotFound("No se encontraron destinos activos para el cliente");
+                    return Ok("No se encontraron destinos activos para el cliente");
                 }
 
                 return Ok(destinos);
@@ -172,14 +78,460 @@ namespace VelsatMobile.Controllers
                     return BadRequest("El código de taxi es requerido");
                 }
 
-                var conductor = await _unitOfWork.AplicativoRepository.GetDetalleConductor(codtaxi);
+                var conductor = await _readOnlyUow.AplicativoRepository.GetDetalleConductor(codtaxi);
 
                 if (conductor == null)
                 {
-                    return NotFound("No se encontró información del conductor");
+                    return Ok("No se encontró información del conductor");
                 }
 
                 return Ok(conductor);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        // POST: api/servicios/cancelar
+        [HttpPost("cancelarServicio")]
+        public async Task<IActionResult> CancelarServicio([FromBody] ServicioPasajero servicio)
+        {
+            try
+            {
+                // Validar entrada
+                if (servicio == null)
+                    return BadRequest("Los datos del servicio son requeridos.");
+
+                if (string.IsNullOrWhiteSpace(servicio.Codpedido) || string.IsNullOrWhiteSpace(servicio.Codservicio))
+                    return BadRequest("Codpedido y Codservicio son obligatorios.");
+
+                // Llamada al método en el repositorio
+                var resultado = await _uow.AplicativoRepository.CancelarServicioAsync(servicio);
+
+                _uow.SaveChanges();
+
+                if (!resultado)
+                    return Ok("El servicio no puede ser cancelado. Verifique las condiciones de tiempo.");
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Servicio cancelado correctamente y correos enviados."
+                });
+            }
+            catch (Exception ex)
+            {
+                // Manejo de error interno
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = $"Error interno del servidor: {ex.Message}"
+                });
+            }
+        }
+
+        [HttpPost("enviarCalificacion")]
+        public async Task<IActionResult> EnviarCalificacion([FromQuery] string valor, [FromQuery] string codtaxi)
+        {
+            try
+            {
+                // Validación de parámetros
+                if (string.IsNullOrWhiteSpace(valor) || string.IsNullOrWhiteSpace(codtaxi))
+                {
+                    return BadRequest("El valor de la calificación y el código del taxi son requeridos.");
+                }
+
+                // Llamada al método del repositorio
+                int filasAfectadas = await _uow.AplicativoRepository.EnviarCalificacion(valor, codtaxi);
+
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Calificación enviada correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("No se encontró el conductor especificado.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                // Errores por parámetros inválidos
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                // Errores inesperados
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpGet("serviciosConductor/{codconductor}")]
+        public async Task<IActionResult> ServiciosConductor(string codconductor)
+        {
+            try
+            {
+                // Validación del parámetro
+                if (string.IsNullOrWhiteSpace(codconductor))
+                {
+                    return BadRequest("El código de conductor es requerido");
+                }
+
+                // Llamar al método del repositorio
+                var servicios = await _readOnlyUow.AplicativoRepository.ServiciosConductor(codconductor);
+
+                // Validar si hay resultados
+                if (servicios == null || !servicios.Any())
+                {
+                    return Ok("No se encontraron servicios activos para el día de hoy.");
+                }
+
+                // Retornar resultado OK
+                return Ok(servicios);
+            }
+            catch (Exception ex)
+            {
+                // Manejo de errores
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpGet("detalleServicioConductor/{codservicio}")]
+        public async Task<IActionResult> GetDetalleServicioConductor(string codservicio)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(codservicio))
+                {
+                    return BadRequest("El código de servicio es requerido");
+                }
+
+                var detalles = await _readOnlyUow.AplicativoRepository.GetDetalleServicioConductor(codservicio);
+
+                if (detalles == null || !detalles.Any())
+                {
+                    return NotFound("No se encontraron detalles para el servicio especificado");
+                }
+
+                return Ok(detalles);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpGet("central")]
+        public async Task<IActionResult> GetCentral()
+        {
+            try
+            {
+                var centrales = await _readOnlyUow.AplicativoRepository.GetCentral();
+
+                if (centrales == null || !centrales.Any())
+                {
+                    return Ok("No se encontró personal registrado");
+                }
+
+                return Ok(centrales);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPut("cambiarOrdenBatch")]
+        public async Task<IActionResult> CambiarOrdenBatch([FromBody] List<CambioOrden> cambios)
+        {
+            try
+            {
+                // Llamada al método del repositorio
+                int filasAfectadas = await _uow.AplicativoRepository.CambiarOrdenBatch(cambios);
+
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Orden cambiado correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("No se pudo cambiar el orden.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                // Errores por parámetros inválidos
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                // Errores inesperados
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("EnviarObservacion")]
+        public async Task<IActionResult> EnviarObservacion([FromBody] string observacion, [FromQuery] int codpedido)
+        {
+            try
+            {
+
+                // Llamada al método del repositorio
+                int filasAfectadas = await _uow.AplicativoRepository.EnviarObservacion(observacion, codpedido);
+
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Observación enviada correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Observación no enviada.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                // Errores por parámetros inválidos
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                // Errores inesperados
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("ActualizarFechaInicioServicio")]
+        public async Task<IActionResult> ActualizarFechaInicioServicio([FromQuery] string codservicio)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.AplicativoRepository.ActualizarFechaInicioServicio(codservicio);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Fecha de inicio actualizada correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Fecha de inicio no actualizada.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("ActualizarTaxiServicio")]
+        public async Task<IActionResult> ActualizarTaxiServicio([FromQuery] string codservicio, [FromQuery] string codtaxi)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.AplicativoRepository.ActualizarTaxiServicio(codservicio, codtaxi);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Taxi actualizado correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Taxi no actualizado.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("ActualizarFechaFinServicio")]
+        public async Task<IActionResult> ActualizarFechaFinServicio([FromQuery] string codservicio)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.AplicativoRepository.ActualizarFechaFinServicio(codservicio);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Fecha de fin actualizada correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Fecha de fin no actualizada.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("ActualizarTaxiFinServicio")]
+        public async Task<IActionResult> ActualizarTaxiFinServicio([FromQuery] string codtaxi)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.AplicativoRepository.ActualizarTaxiFinServicio(codtaxi);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Taxi actualizado correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Taxi no actualizado.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("SubirPasajero")]
+        public async Task<IActionResult> SubirPasajero([FromQuery] string codpedido)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.AplicativoRepository.SubirPasajero(codpedido);
+                _uow.SaveChanges();
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Pasajero subido correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Pasajero no subido.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPost("BajarPasajero")]
+        public async Task<IActionResult> BajarPasajero([FromQuery] string codpedido)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.AplicativoRepository.BajarPasajero(codpedido);
+                _uow.SaveChanges();
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Pasajero bajado correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("Pasajero no bajado.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpGet("PasajerosDisponibles/{codservicio}")]
+        public async Task<IActionResult> GetPasajerosDisponibles(string codservicio)
+        {
+            try
+            {
+                var cantidad = await _readOnlyUow.AplicativoRepository.PasajerosDisponibles(codservicio);
+
+                return Ok(new
+                {
+                    codservicio = codservicio,
+                    pasajerosDisponibles = cantidad
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpGet("UbiPasajeros/{codservicio}")]
+        public async Task<IActionResult> GetUbiPasajeros(string codservicio)
+        {
+            try
+            {
+                var ubicaciones = await _readOnlyUow.AplicativoRepository.UbiPasajeros(codservicio);
+                return Ok(new
+                {
+                    codservicio = codservicio,
+                    pasajeros = ubicaciones
+                });
             }
             catch (Exception ex)
             {

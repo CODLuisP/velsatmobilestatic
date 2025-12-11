@@ -7,131 +7,292 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using VelsatBackendAPI.Data.Services;
 using VelsatMobile.Data.Repositories;
 
 namespace VelsatBackendAPI.Data.Repositories
 {
     public class UnitOfWork : IUnitOfWork, IDisposable
     {
-        private readonly IDbConnection _defaultConnection;
-        private IDbTransaction _defaultTransaction;
+        private readonly string _defaultConnectionString;
 
-        private readonly IDbConnection _secondConnection;
-        private IDbTransaction _secondTransaction;
+        private MySqlConnection _defaultConnection;
 
-        private readonly IUserRepository _userRepository;
-        private readonly IDatosCargainicialService _datosCargaInicialService;
-        private readonly IHistoricosRepository _historicosRepository;
-        private readonly IKilometrosRepository _kilometrosRepository;
-        private readonly IServidorRepository _servidorRepository;
-        private readonly IAplicativoRepository _aplicativoRepository;
+        private MySqlTransaction _defaultTransaction;
+
+        private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
 
         private bool _disposed = false;
+        private bool _committed = false;
+        private readonly object _lockObject = new object();
 
-        public UnitOfWork(MySqlConfiguration configuration, IConfiguration config)
+        public UnitOfWork(MySqlConfiguration configuration)
         {
-            _defaultConnection = new MySqlConnection(configuration.DefaultConnection);
-            _defaultConnection.Open();
-            _defaultTransaction = _defaultConnection.BeginTransaction();
+            _defaultConnectionString = configuration.DefaultConnection
+                ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
 
-            _secondConnection = new MySqlConnection(configuration.SecondConnection);
-            _secondConnection.Open();
-            _secondTransaction = _secondConnection.BeginTransaction();
-
-            _userRepository = new UserRepository(_defaultConnection, _defaultTransaction);
-            _datosCargaInicialService = new DatosCargainicialService(_defaultConnection, _defaultTransaction);
-            _historicosRepository = new HistoricosRepository(_defaultConnection, _secondConnection, _secondTransaction);
-            _kilometrosRepository = new KilometrosRepository(_defaultConnection, _secondConnection, _defaultTransaction, _secondTransaction);
-
-            _servidorRepository = new ServidorRepository(_defaultConnection);
-
-            _aplicativoRepository = new AplicativoRepository(_defaultConnection, _defaultTransaction);
+            _aplicativoRepository = new Lazy<IAplicativoRepository>(() =>
+                new AplicativoRepository(DefaultConnection, _defaultTransaction));
         }
 
-        public IUserRepository UserRepository => _userRepository;
-        public IDatosCargainicialService DatosCargainicialService => _datosCargaInicialService;
-        public IHistoricosRepository HistoricosRepository => _historicosRepository;
-        public IKilometrosRepository KilometrosRepository => _kilometrosRepository;
-        public IServidorRepository ServidorRepository => _servidorRepository;
-        public IAplicativoRepository AplicativoRepository => _aplicativoRepository;
-
-        public void SaveChanges()
+        private MySqlConnection DefaultConnection
         {
-            try
+            get
             {
-                _defaultTransaction?.Commit();
-                _secondTransaction?.Commit();
-            }
-            catch
-            {
-                // Si hay error, hacer rollback
-                _defaultTransaction?.Rollback();
-                _secondTransaction?.Rollback();
-                throw;
+                ValidateNotDisposedOrCommitted();
+
+                if (_defaultConnection == null)
+                {
+                    lock (_lockObject)
+                    {
+                        if (_defaultConnection == null)
+                        {
+                            // ✅ CAMBIO: Usar método con retry
+                            _defaultConnection = OpenConnectionWithRetry(
+                                _defaultConnectionString,
+                                "DEFAULT (con transacción)");
+
+                            // Iniciar transacción DESPUÉS de abrir la conexión exitosamente
+                            _defaultTransaction = _defaultConnection.BeginTransaction();
+
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[UnitOfWork] Transacción DEFAULT iniciada");
+                        }
+                    }
+                }
+                return _defaultConnection;
             }
         }
 
-        public void Dispose()
+        private void ValidateNotDisposedOrCommitted()
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(UnitOfWork),
+                    "No se puede usar un UnitOfWork que ya ha sido liberado. Crea una nueva instancia.");
+            }
+
+            if (_committed)
+            {
+                throw new InvalidOperationException(
+                    "Este UnitOfWork ya fue confirmado con SaveChanges(). Crea una nueva instancia para realizar más operaciones.");
+            }
         }
 
-        protected virtual void Dispose(bool disposing)
+        /// <summary>
+        /// Abre una conexión MySQL con reintentos automáticos en caso de colisión de pool.
+        /// </summary>
+        private MySqlConnection OpenConnectionWithRetry(
+            string connectionString,
+            string connectionName,
+            int maxRetries = 5)
         {
-            if (!_disposed && disposing)
+            Exception lastException = null;
+
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
                 try
                 {
-                    // Primero hacer rollback si las transacciones siguen activas
-                    if (_defaultTransaction != null)
+                    var connection = new MySqlConnection(connectionString);
+                    connection.Open();
+
+                    // ✅ CRÍTICO: Configurar charset UTF-8 inmediatamente después de abrir
+                    using (var cmd = new MySqlCommand("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", connection))
                     {
-                        _defaultTransaction.Rollback();
-                        _defaultTransaction.Dispose();
-                        _defaultTransaction = null;
+                        cmd.ExecuteNonQuery();
                     }
 
-                    if (_secondTransaction != null)
-                    {
-                        _secondTransaction.Rollback();
-                        _secondTransaction.Dispose();
-                        _secondTransaction = null;
-                    }
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[UnitOfWork] ✅ Conexión {connectionName} " +
+                        $"{connection.ServerThread} abierta con transacción" +
+                        (attempt > 0 ? $" (intento {attempt + 1})" : ""));
 
-                    // Luego cerrar y liberar las conexiones
-                    if (_defaultConnection != null)
+                    return connection;
+                }
+                catch (ArgumentException ex) when (
+                    ex.Message.Contains("An item with the same key has already been added"))
+                {
+                    lastException = ex;
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[UnitOfWork] ⚠️ Pool collision detectada en {connectionName} " +
+                        $"(intento {attempt + 1}/{maxRetries})");
+
+                    if (attempt < maxRetries - 1)
                     {
-                        if (_defaultConnection.State == ConnectionState.Open)
+                        // Backoff exponencial: 10ms, 20ms, 40ms, 80ms, 160ms
+                        int delayMs = 10 * (int)Math.Pow(2, attempt);
+                        System.Threading.Thread.Sleep(delayMs);
+
+                        // ✅ CRÍTICO: Intentar limpiar el pool antes de reintentar
+                        try
                         {
-                            _defaultConnection.Close();
+                            MySqlConnection.ClearPool(new MySqlConnection(connectionString));
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[UnitOfWork] Pool {connectionName} limpiado");
                         }
-                        _defaultConnection.Dispose();
-                    }
-
-                    if (_secondConnection != null)
-                    {
-                        if (_secondConnection.State == ConnectionState.Open)
+                        catch
                         {
-                            _secondConnection.Close();
+                            // Ignorar errores al limpiar
                         }
-                        _secondConnection.Dispose();
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error disposing UnitOfWork: {ex.Message}");
+                    // Otros errores no relacionados con el pool - fallar inmediatamente
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[UnitOfWork] ❌ Error abriendo {connectionName}: {ex.Message}");
+                    throw;
+                }
+            }
+
+            // Si llegamos aquí, fallaron todos los intentos
+            throw new InvalidOperationException(
+                $"No se pudo abrir la conexión {connectionName} después de {maxRetries} intentos. " +
+                $"Pool de conexiones MySQL posiblemente corrupto.",
+                lastException);
+        }
+
+        public IAplicativoRepository AplicativoRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _aplicativoRepository.Value;
+
+            }
+        }
+
+
+        public void SaveChanges()
+        {
+            ValidateNotDisposedOrCommitted();
+
+            lock (_lockObject)
+            {
+                try
+                {
+                    // Commit de las transacciones
+                    _defaultTransaction?.Commit();
+                    _committed = true;
+                }
+                catch
+                {
+                    // Rollback en caso de error
+                    try { _defaultTransaction?.Rollback(); } catch { }
+                    throw;
                 }
                 finally
                 {
-                    _disposed = true;
+                    // ✅ CRÍTICO: Liberar TODO inmediatamente después de commit
+                    DisposeTransactionsAndConnections();
                 }
             }
         }
 
-        ~UnitOfWork()
+        private void DisposeTransactionsAndConnections()
         {
-            Dispose(false);
+            // Liberar transacciones
+            if (_defaultTransaction != null)
+            {
+                _defaultTransaction.Dispose();
+                _defaultTransaction = null;
+            }
+
+            // ✅ Cerrar Y disponer conexiones inmediatamente
+            if (_defaultConnection != null)
+            {
+                try
+                {
+                    if (_defaultConnection.State == ConnectionState.Open)
+                    {
+                        _defaultConnection.Close();
+                    }
+                    _defaultConnection.Dispose();
+                }
+                catch { }
+                finally
+                {
+                    _defaultConnection = null;
+                }
+            }
+
+            // ✅ NUEVO: Sugerir al GC que limpie inmediatamente (opcional, solo si hay problemas graves)
+            // GC.Collect(0, GCCollectionMode.Optimized);
+        }
+
+        // ✅ Dispose optimizado
+        public void Dispose()
+        {
+            Dispose(true);
+            // ✅ REMOVIDO el finalizer, así que esto ya no es necesario
+            // GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return; // Ya fue liberado
+            }
+
+            if (disposing)
+            {
+                lock (_lockObject)
+                {
+                    try
+                    {
+                        // ✅ MEJORADO: Rollback solo si la transacción está activa
+                        if (!_committed)
+                        {
+                            try
+                            {
+                                if (_defaultTransaction != null && _defaultTransaction.Connection != null)
+                                    _defaultTransaction.Rollback();
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Rollback default error: {ex.Message}");
+                            }
+                        }
+
+                        // Liberar todo
+                        DisposeTransactionsAndConnections();
+
+                        // Disponer repositorios si implementan IDisposable
+                        DisposeRepositories();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log el error pero no lanzar excepciones en Dispose
+                        System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Error disposing: {ex.Message}");
+                    }
+                    finally
+                    {
+                        _disposed = true;
+                    }
+                }
+            }
+        }
+
+        private void DisposeRepositories()
+        {
+            // Solo disponer si fueron inicializados
+            TryDisposeRepository(_aplicativoRepository);
+        }
+
+        private void TryDisposeRepository<T>(Lazy<T> lazyRepo)
+        {
+            if (lazyRepo != null && lazyRepo.IsValueCreated && lazyRepo.Value is IDisposable disposable)
+            {
+                try
+                {
+                    disposable.Dispose();
+                }
+                catch
+                {
+                    // Ignorar errores al disponer repositorios
+                }
+            }
         }
     }
 }

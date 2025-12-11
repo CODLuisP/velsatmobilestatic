@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using VelsatBackendAPI.Model;
 
 namespace VelsatMobile.Model
 {
-    public class DatosVehiculo
+    public class CambioOrden
     {
-        public DateTime FechaActual { get; set; }
-        public Device Vehiculo { get; set; }
+        public string Orden { get; set; }
+        public int Codpedido { get; set; }
     }
 }
