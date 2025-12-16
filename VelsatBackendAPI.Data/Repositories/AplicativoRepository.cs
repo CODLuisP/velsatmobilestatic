@@ -113,6 +113,8 @@ namespace VelsatMobile.Data.Repositories
 
             if (filasSubservicio > 0 && filasServicio > 0)
             {
+                await DecrementarTotalPax(servicio.Codservicio);
+
                 var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
                 var nombrePasajero = await GetNombrePasajero(servicio.Codcliente);
 
@@ -133,6 +135,25 @@ namespace VelsatMobile.Data.Repositories
             }
 
             return true;
+        }
+
+        private async Task<int> DecrementarTotalPax(string codservicio)
+        {
+            // Convertir el string a int de forma segura
+            if (!int.TryParse(codservicio, out int codservicioInt))
+            {
+                throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
+            }
+
+            string sql = @"UPDATE servicio SET totalpax = CAST(CAST(totalpax AS UNSIGNED) - 1 AS CHAR) WHERE codservicio = @Codservicio AND CAST(totalpax AS UNSIGNED) > 0";
+
+            return await _defaultConnection.ExecuteAsync(sql,
+                new
+                {
+                    Codservicio = codservicioInt
+                },
+                transaction: _defaultTransaction
+            );
         }
 
         private async Task<Pasajero> GetNombrePasajero(string codcliente)
