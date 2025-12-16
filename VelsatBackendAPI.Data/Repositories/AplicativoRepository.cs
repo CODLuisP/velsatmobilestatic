@@ -431,7 +431,7 @@ namespace VelsatMobile.Data.Repositories
 
         public async Task<IEnumerable<Central>> GetCentral()
         {
-            string sql = @"SELECT * FROM central where habilitado = '0'";
+            string sql = @"SELECT * FROM central where habilitado = '1'";
 
             return await _defaultConnection.QueryAsync<Central>(sql, transaction: _defaultTransaction);
         }
