@@ -26,6 +26,7 @@ namespace VelsatMobile.Data.Repositories
         public async Task<IEnumerable<ServicioPasajero>> ServiciosPasajeros(string codcliente)
         {
             string fechaActual = DateTime.Now.AddHours(-5).ToString("dd/MM/yyyy HH:mm");
+
             string fechaFinal = DateTime.Now.AddHours(24).ToString("dd/MM/yyyy HH:mm");
 
             string sql = @"SELECT l.direccion, l.distrito, l.wy, l.wx, l.referencia, 
