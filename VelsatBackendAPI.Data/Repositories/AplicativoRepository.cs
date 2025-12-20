@@ -62,18 +62,11 @@ namespace VelsatMobile.Data.Repositories
 
         public async Task<bool> CancelarServicioAsync(ServicioPasajero servicio)
         {
-            // 🔥 Definir la zona horaria de Perú (UTC-5)
             TimeZoneInfo peruTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time");
-
-            // Obtener la hora actual en Perú
             DateTimeOffset ahoraUtc = DateTimeOffset.UtcNow;
             DateTimeOffset ahoraPeru = TimeZoneInfo.ConvertTime(ahoraUtc, peruTimeZone);
             long unixNow = ahoraPeru.ToUnixTimeSeconds();
-
-            // Convertir la fecha del servicio (que viene en hora peruana)
             long unixServicio = ConvertirHoraAUnix(servicio.Fechaservicio ?? "", peruTimeZone);
-
-            // Calcular diferencia (tiempo restante hasta el servicio)
             long diferenciaSegundos = unixServicio - unixNow;
             long diferenciaMinutos = diferenciaSegundos / 60;
 
@@ -81,12 +74,10 @@ namespace VelsatMobile.Data.Repositories
 
             if (servicio.Tipo == "I" && diferenciaMinutos > 120)
             {
-                // Servicio de Ingreso: se puede cancelar hasta 2h antes (120 minutos)
                 puedeCancelar = true;
             }
             else if (servicio.Tipo == "S" && diferenciaMinutos > 30)
             {
-                // Servicio de Salida: se puede cancelar hasta 30min antes
                 puedeCancelar = true;
             }
 
@@ -96,7 +87,6 @@ namespace VelsatMobile.Data.Repositories
             }
 
             string fechaCancelacion = ahoraPeru.ToString("dd/MM/yyyy HH:mm:ss");
-
             string sqlSubservicio = @"UPDATE subservicio SET feccancelpas = @Feccancelpas, estado = 'C' WHERE codpedido = @Codpedido";
             string sqlServicio = @"UPDATE servicio SET alertcancelpas = '1' WHERE codservicio = @Codservicio";
 
@@ -115,7 +105,6 @@ namespace VelsatMobile.Data.Repositories
             if (filasSubservicio > 0 && filasServicio > 0)
             {
                 await DecrementarTotalPax(servicio.Codservicio);
-
                 var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
                 var nombrePasajero = await GetNombrePasajero(servicio.Codcliente);
 
@@ -131,7 +120,7 @@ namespace VelsatMobile.Data.Repositories
                         correo.Proveedor,
                         servicio.Empresa ?? ""
                     );
-                    await Task.Delay(2000);
+                    await Task.Delay(1000);
                 }
             }
 
@@ -140,7 +129,6 @@ namespace VelsatMobile.Data.Repositories
 
         private async Task<int> DecrementarTotalPax(string codservicio)
         {
-            // Convertir el string a int de forma segura
             if (!int.TryParse(codservicio, out int codservicioInt))
             {
                 throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
@@ -148,18 +136,16 @@ namespace VelsatMobile.Data.Repositories
 
             string sql = @"UPDATE servicio SET totalpax = CAST(CAST(totalpax AS UNSIGNED) - 1 AS CHAR) WHERE codservicio = @Codservicio AND CAST(totalpax AS UNSIGNED) > 0";
 
-            return await _defaultConnection.ExecuteAsync(sql,
-                new
-                {
-                    Codservicio = codservicioInt
-                },
+            int filasAfectadas = await _defaultConnection.ExecuteAsync(sql,
+                new { Codservicio = codservicioInt },
                 transaction: _defaultTransaction
             );
+
+            return filasAfectadas;
         }
 
         private async Task<Pasajero> GetNombrePasajero(string codcliente)
         {
-            // Convertir a int de forma segura
             if (!int.TryParse(codcliente, out int codClienteInt))
             {
                 throw new ArgumentException("El código de cliente no es válido. Debe ser un número entero.");
@@ -167,52 +153,62 @@ namespace VelsatMobile.Data.Repositories
 
             string sql = @"SELECT codlan, apellidos from cliente WHERE codcliente = @Codcliente";
 
-            return await _defaultConnection.QueryFirstOrDefaultAsync<Pasajero>(sql, new { Codcliente = codClienteInt }, transaction: _defaultTransaction);
+            var pasajero = await _defaultConnection.QueryFirstOrDefaultAsync<Pasajero>(sql,
+                new { Codcliente = codClienteInt },
+                transaction: _defaultTransaction);
+
+            return pasajero;
         }
 
         private long ConvertirHoraAUnix(string fechaHora, TimeZoneInfo timeZone)
         {
-            // Parsear la fecha asumiendo que está en la zona horaria de Perú
-            DateTime fechaLocal = DateTime.ParseExact(
-                fechaHora,
-                "dd/MM/yyyy HH:mm",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None
-            );
+            try
+            {
+                DateTime fechaLocal = DateTime.ParseExact(
+                    fechaHora,
+                    "dd/MM/yyyy HH:mm",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None
+                );
 
-            // Crear DateTimeOffset con la zona horaria especificada
-            DateTimeOffset fechaConZona = new DateTimeOffset(
-                fechaLocal,
-                timeZone.GetUtcOffset(fechaLocal)
-            );
+                DateTimeOffset fechaConZona = new DateTimeOffset(
+                    fechaLocal,
+                    timeZone.GetUtcOffset(fechaLocal)
+                );
 
-            // Retornar el timestamp en segundos
-            return fechaConZona.ToUnixTimeSeconds();
+                long unix = fechaConZona.ToUnixTimeSeconds();
+                return unix;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
         }
 
         private async Task<IEnumerable<Correocancelacion>> GetCorreosCancelarAsync(string cliente, string proveedor)
         {
             string sql;
+            IEnumerable<Correocancelacion> correos;
 
             if (cliente == "DHL")
             {
-                // Correos exclusivos para DHL
                 sql = @"SELECT * FROM correos WHERE cliente = 'DHL'";
-                return await _defaultConnection.QueryAsync<Correocancelacion>(
+                correos = await _defaultConnection.QueryAsync<Correocancelacion>(
                     sql,
                     transaction: _defaultTransaction
                 );
             }
             else
             {
-                // Correos generales según proveedor
                 sql = @"SELECT * FROM correos WHERE cliente = 'all' AND proveedor = @Proveedor";
-                return await _defaultConnection.QueryAsync<Correocancelacion>(
+                correos = await _defaultConnection.QueryAsync<Correocancelacion>(
                     sql,
                     new { Proveedor = proveedor },
                     transaction: _defaultTransaction
                 );
             }
+
+            return correos;
         }
 
         private async Task<bool> EnviarCorreoCancelacionAsync(string destinatario, string nombrePasajero, string codigo, string tipo, string numeroMovil, string fechaServicio, string proveedor, string empresa)
@@ -243,7 +239,6 @@ namespace VelsatMobile.Data.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al enviar correo a {destinatario}: {ex.Message}");
                 return false;
             }
         }
