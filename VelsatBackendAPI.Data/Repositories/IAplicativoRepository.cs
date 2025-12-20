@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using VelsatBackendAPI.Model;
 using VelsatMobile.Model;
 
 namespace VelsatMobile.Data.Repositories
@@ -44,8 +43,5 @@ namespace VelsatMobile.Data.Repositories
         Task<int> PasajerosDisponibles(string codservicio);
 
         Task<IEnumerable<UbiPasajero>> UbiPasajeros(string codservicio);
-
-        Task<Account> ValidateUser(string accountID, string password, char tipo);
-
     }
 }
