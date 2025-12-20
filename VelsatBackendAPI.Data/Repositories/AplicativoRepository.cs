@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Text;
 using System.Threading.Tasks;
+using VelsatBackendAPI.Model;
 using VelsatMobile.Model;
 
 namespace VelsatMobile.Data.Repositories
@@ -577,6 +578,32 @@ namespace VelsatMobile.Data.Repositories
                     Codservicio = codservicio
                 }
             );
+        }
+
+        public async Task<Account> ValidateUser(string login, string clave, char tipo)
+        {
+            string sql = tipo switch
+            {
+
+                'p' => @"
+                    SELECT codcliente AS Codigo, codlan AS AccountID, clave AS Password, 
+                           apellidos AS Description 
+                    FROM cliente 
+                    WHERE codlan = @Login AND clave = @Clave AND estadocuenta = 'A'",
+
+                'c' => @"
+                    SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password, 
+                           CONCAT(apellidos, ' ', nombres) AS Description 
+                    FROM taxi 
+                    WHERE login = @Login AND clave = @Clave AND estado = 'A'",
+
+                _ => throw new ArgumentException("Tipo de usuario no válido", nameof(tipo))
+            };
+
+            return await _defaultConnection.QueryFirstOrDefaultAsync<Account>(
+                sql,
+                new { Login = login, Clave = clave },
+                transaction: _defaultTransaction); // ✅ Agregar transaction
         }
     }
 }
