@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using VelsatBackendAPI.Model;
 using VelsatMobile.Model;
 
 namespace VelsatMobile.Data.Repositories

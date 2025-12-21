@@ -17,6 +17,8 @@ namespace VelsatMobile.Data.Repositories
         private MySqlConnection _defaultConnection;
 
         private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
+        private readonly Lazy<IUserRepository> _userRepository;
+
 
         private bool _disposed = false;
         private readonly object _lockObject = new object();
@@ -28,6 +30,9 @@ namespace VelsatMobile.Data.Repositories
 
             // ✅ Inicializar servicio SIN transacción (segundo parámetro = null)
             _aplicativoRepository = new Lazy<IAplicativoRepository>(() => new AplicativoRepository(DefaultConnection, null));
+
+            _userRepository = new Lazy<IUserRepository>(() => new UserRepository(DefaultConnection, null));
+
         }
 
         private MySqlConnection DefaultConnection
@@ -83,6 +88,16 @@ namespace VelsatMobile.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _aplicativoRepository.Value;
+            }
+        }
+
+        public IUserRepository UserRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _userRepository.Value;
             }
         }
 

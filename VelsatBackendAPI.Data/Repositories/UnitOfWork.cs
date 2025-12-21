@@ -16,10 +16,11 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly string _defaultConnectionString;
 
         private MySqlConnection _defaultConnection;
-
         private MySqlTransaction _defaultTransaction;
 
         private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
+        private readonly Lazy<IUserRepository> _userRepository;
+
 
         private bool _disposed = false;
         private bool _committed = false;
@@ -32,6 +33,9 @@ namespace VelsatBackendAPI.Data.Repositories
 
             _aplicativoRepository = new Lazy<IAplicativoRepository>(() =>
                 new AplicativoRepository(DefaultConnection, _defaultTransaction));
+
+            _userRepository = new Lazy<IUserRepository>(() =>
+               new UserRepository(DefaultConnection, _defaultTransaction));
         }
 
         private MySqlConnection DefaultConnection
@@ -159,6 +163,15 @@ namespace VelsatBackendAPI.Data.Repositories
                 ValidateNotDisposedOrCommitted();
                 return _aplicativoRepository.Value;
 
+            }
+        }
+
+        public IUserRepository UserRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _userRepository.Value;
             }
         }
 

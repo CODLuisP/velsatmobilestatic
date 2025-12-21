@@ -10,5 +10,8 @@ namespace VelsatMobile.Data.Repositories
     public interface IReadOnlyUnitOfWork : IDisposable
     {
         IAplicativoRepository AplicativoRepository { get; }
+
+        IUserRepository UserRepository { get; }
+
     }
 }
