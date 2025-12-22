@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
@@ -63,41 +64,34 @@ namespace VelsatMobile.Data.Repositories
         public async Task<bool> CancelarServicioAsync(ServicioPasajero servicio)
         {
             TimeZoneInfo peruTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time");
-            DateTimeOffset ahoraUtc = DateTimeOffset.UtcNow;
-            DateTimeOffset ahoraPeru = TimeZoneInfo.ConvertTime(ahoraUtc, peruTimeZone);
+            DateTimeOffset ahoraPeru = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, peruTimeZone);
+
             long unixNow = ahoraPeru.ToUnixTimeSeconds();
             long unixServicio = ConvertirHoraAUnix(servicio.Fechaservicio ?? "", peruTimeZone);
-            long diferenciaSegundos = unixServicio - unixNow;
-            long diferenciaMinutos = diferenciaSegundos / 60;
 
-            bool puedeCancelar = false;
+            long diferenciaMinutos = (unixServicio - unixNow) / 60;
 
-            if (servicio.Tipo == "I" && diferenciaMinutos > 120)
-            {
-                puedeCancelar = true;
-            }
-            else if (servicio.Tipo == "S" && diferenciaMinutos > 30)
-            {
-                puedeCancelar = true;
-            }
+            bool puedeCancelar =
+                (servicio.Tipo == "I" && diferenciaMinutos > 120) ||
+                (servicio.Tipo == "S" && diferenciaMinutos > 30);
 
             if (!puedeCancelar)
-            {
                 return false;
-            }
 
             string fechaCancelacion = ahoraPeru.ToString("dd/MM/yyyy HH:mm:ss");
-            string sqlSubservicio = @"UPDATE subservicio SET feccancelpas = @Feccancelpas, estado = 'C' WHERE codpedido = @Codpedido";
-            string sqlServicio = @"UPDATE servicio SET alertcancelpas = '1' WHERE codservicio = @Codservicio";
 
             int filasSubservicio = await _defaultConnection.ExecuteAsync(
-                sqlSubservicio,
+                @"UPDATE subservicio 
+          SET feccancelpas = @Feccancelpas, estado = 'C' 
+          WHERE codpedido = @Codpedido",
                 new { Feccancelpas = fechaCancelacion, Codpedido = servicio.Codpedido },
                 transaction: _defaultTransaction
             );
 
             int filasServicio = await _defaultConnection.ExecuteAsync(
-                sqlServicio,
+                @"UPDATE servicio 
+          SET alertcancelpas = '1' 
+          WHERE codservicio = @Codservicio",
                 new { Codservicio = servicio.Codservicio },
                 transaction: _defaultTransaction
             );
@@ -105,27 +99,30 @@ namespace VelsatMobile.Data.Repositories
             if (filasSubservicio > 0 && filasServicio > 0)
             {
                 await DecrementarTotalPax(servicio.Codservicio);
+
                 var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
-                var nombrePasajero = await GetNombrePasajero(servicio.Codcliente);
+                var pasajero = await GetNombrePasajero(servicio.Codcliente);
 
                 foreach (var correo in correos)
                 {
                     await EnviarCorreoCancelacionAsync(
                         correo.Correo,
-                        nombrePasajero.Apellidos,
-                        nombrePasajero.Codlan,
+                        pasajero.Apellidos,
+                        pasajero.Codlan,
                         servicio.Tipo == "I" ? "Ingreso" : "Salida",
                         servicio.Numero ?? "N/A",
                         servicio.Fechaservicio ?? "",
                         correo.Proveedor,
                         servicio.Empresa ?? ""
                     );
+
                     await Task.Delay(1000);
                 }
             }
 
             return true;
         }
+
 
         private async Task<int> DecrementarTotalPax(string codservicio)
         {
@@ -162,28 +159,18 @@ namespace VelsatMobile.Data.Repositories
 
         private long ConvertirHoraAUnix(string fechaHora, TimeZoneInfo timeZone)
         {
-            try
-            {
-                DateTime fechaLocal = DateTime.ParseExact(
-                    fechaHora,
-                    "dd/MM/yyyy HH:mm",
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.None
-                );
+            DateTime fechaLocal = DateTime.ParseExact(
+                fechaHora,
+                "dd/MM/yyyy HH:mm",
+                CultureInfo.InvariantCulture
+            );
 
-                DateTimeOffset fechaConZona = new DateTimeOffset(
-                    fechaLocal,
-                    timeZone.GetUtcOffset(fechaLocal)
-                );
-
-                long unix = fechaConZona.ToUnixTimeSeconds();
-                return unix;
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
+            return new DateTimeOffset(
+                fechaLocal,
+                timeZone.GetUtcOffset(fechaLocal)
+            ).ToUnixTimeSeconds();
         }
+
 
         private async Task<IEnumerable<Correocancelacion>> GetCorreosCancelarAsync(string cliente, string proveedor)
         {
@@ -218,26 +205,35 @@ namespace VelsatMobile.Data.Repositories
                 using var smtp = new SmtpClient("us1.workspace.org")
                 {
                     Port = 587,
-                    Credentials = new NetworkCredential("notificaciones@notificaciones.velsat.com.pe", "r&/HU#Cb4x99"),
+                    Credentials = new NetworkCredential(
+                        "notificaciones@notificaciones.velsat.com.pe",
+                        "r&/HU#Cb4x99"
+                    ),
                     EnableSsl = true,
                     Timeout = 30000
                 };
 
-                var mail = new MailMessage(
+                using var mail = new MailMessage(
                     new MailAddress("notificaciones@notificaciones.velsat.com.pe", "Velsat SAC"),
                     new MailAddress(destinatario))
                 {
                     Subject = $"Cancelación de Servicio - {tipo}",
-                    Body = GenerarCuerpoCorreoCancelacion(nombrePasajero, codigo, tipo, numeroMovil, fechaServicio, proveedor, empresa),
+                    Body = GenerarCuerpoCorreoCancelacion(
+                        nombrePasajero,
+                        codigo,
+                        tipo,
+                        numeroMovil,
+                        fechaServicio,
+                        proveedor,
+                        empresa
+                    ),
                     IsBodyHtml = true
                 };
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await smtp.SendMailAsync(mail).WaitAsync(cts.Token);
-
+                await smtp.SendMailAsync(mail);
                 return true;
             }
-            catch (Exception ex)
+            catch
             {
                 return false;
             }
