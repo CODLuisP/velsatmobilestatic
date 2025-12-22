@@ -1,5 +1,7 @@
 ﻿using Dapper;
 using Newtonsoft.Json;
+using SendGrid;
+using SendGrid.Helpers.Mail;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -68,7 +70,6 @@ namespace VelsatMobile.Data.Repositories
 
             long unixNow = ahoraPeru.ToUnixTimeSeconds();
             long unixServicio = ConvertirHoraAUnix(servicio.Fechaservicio ?? "", peruTimeZone);
-
             long diferenciaMinutos = (unixServicio - unixNow) / 60;
 
             bool puedeCancelar =
@@ -97,22 +98,19 @@ namespace VelsatMobile.Data.Repositories
             );
 
             if (filasSubservicio > 0 && filasServicio > 0)
-            {
                 await DecrementarTotalPax(servicio.Codservicio);
-            }
 
             try
             {
                 var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
                 var pasajero = await GetNombrePasajero(servicio.Codcliente);
 
-                // Enviar correos sin bloquear
-                _ = Task.Run(async () =>
+                foreach (var correo in correos)
                 {
-                    foreach (var correo in correos)
-                    {
-                        await EnviarCorreoCancelacionAsync(
-                            correo.Correo,
+                    await InsertarCorreoColaAsync(
+                        correo.Correo,
+                        $"Cancelación de Servicio - {(servicio.Tipo == "I" ? "Ingreso" : "Salida")}",
+                        GenerarCuerpoCorreoCancelacion(
                             pasajero.Apellidos,
                             pasajero.Codlan,
                             servicio.Tipo == "I" ? "Ingreso" : "Salida",
@@ -120,18 +118,41 @@ namespace VelsatMobile.Data.Repositories
                             servicio.Fechaservicio ?? "",
                             correo.Proveedor,
                             servicio.Empresa ?? ""
-                        );
-                    }
-                });
+                        )
+                    );
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error en correos: {ex.Message}");
+                // ⚠️ El servicio NO debe fallar si el correo falla
+                Console.WriteLine($"ERROR COLA CORREOS: {ex}");
             }
 
             return true;
         }
 
+        private async Task InsertarCorreoColaAsync(
+    string destinatario,
+    string asunto,
+    string cuerpoHtml)
+        {
+            const string sql = @"
+        INSERT INTO cola_correos
+        (destinatario, asunto, cuerpo, enviado, intentos, fecha_creacion)
+        VALUES
+        (@Destinatario, @Asunto, @Cuerpo, 0, 0, NOW())";
+
+            await _defaultConnection.ExecuteAsync(
+                sql,
+                new
+                {
+                    Destinatario = destinatario,
+                    Asunto = asunto,
+                    Cuerpo = cuerpoHtml
+                },
+                transaction: _defaultTransaction
+            );
+        }
 
         private async Task<int> DecrementarTotalPax(string codservicio)
         {
@@ -205,47 +226,6 @@ namespace VelsatMobile.Data.Repositories
             }
 
             return correos;
-        }
-
-        private async Task<bool> EnviarCorreoCancelacionAsync(string destinatario, string nombrePasajero, string codigo, string tipo, string numeroMovil, string fechaServicio, string proveedor, string empresa)
-        {
-            try
-            {
-                using var smtp = new SmtpClient("us1.workspace.org")
-                {
-                    Port = 587,
-                    Credentials = new NetworkCredential(
-                        "notificaciones@notificaciones.velsat.com.pe",
-                        "r&/HU#Cb4x99"
-                    ),
-                    EnableSsl = true,
-                    Timeout = 30000
-                };
-
-                using var mail = new MailMessage(
-                    new MailAddress("notificaciones@notificaciones.velsat.com.pe", "Velsat SAC"),
-                    new MailAddress(destinatario))
-                {
-                    Subject = $"Cancelación de Servicio - {tipo}",
-                    Body = GenerarCuerpoCorreoCancelacion(
-                        nombrePasajero,
-                        codigo,
-                        tipo,
-                        numeroMovil,
-                        fechaServicio,
-                        proveedor,
-                        empresa
-                    ),
-                    IsBodyHtml = true
-                };
-
-                await smtp.SendMailAsync(mail);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private string GenerarCuerpoCorreoCancelacion(string nombrePasajero, string codigo, string tipo, string numeroMovil, string fechaServicio, string proveedor, string empresa)
