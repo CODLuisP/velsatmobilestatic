@@ -99,25 +99,34 @@ namespace VelsatMobile.Data.Repositories
             if (filasSubservicio > 0 && filasServicio > 0)
             {
                 await DecrementarTotalPax(servicio.Codservicio);
+            }
 
-                //var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
-                //var pasajero = await GetNombrePasajero(servicio.Codcliente);
+            try
+            {
+                var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
+                var pasajero = await GetNombrePasajero(servicio.Codcliente);
 
-                //foreach (var correo in correos)
-                //{
-                //    await EnviarCorreoCancelacionAsync(
-                //        correo.Correo,
-                //        pasajero.Apellidos,
-                //        pasajero.Codlan,
-                //        servicio.Tipo == "I" ? "Ingreso" : "Salida",
-                //        servicio.Numero ?? "N/A",
-                //        servicio.Fechaservicio ?? "",
-                //        correo.Proveedor,
-                //        servicio.Empresa ?? ""
-                //    );
-
-                //    await Task.Delay(1000);
-                //}
+                // Enviar correos sin bloquear
+                _ = Task.Run(async () =>
+                {
+                    foreach (var correo in correos)
+                    {
+                        await EnviarCorreoCancelacionAsync(
+                            correo.Correo,
+                            pasajero.Apellidos,
+                            pasajero.Codlan,
+                            servicio.Tipo == "I" ? "Ingreso" : "Salida",
+                            servicio.Numero ?? "N/A",
+                            servicio.Fechaservicio ?? "",
+                            correo.Proveedor,
+                            servicio.Empresa ?? ""
+                        );
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en correos: {ex.Message}");
             }
 
             return true;
