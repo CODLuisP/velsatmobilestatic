@@ -100,24 +100,24 @@ namespace VelsatMobile.Data.Repositories
             {
                 await DecrementarTotalPax(servicio.Codservicio);
 
-                var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
-                var pasajero = await GetNombrePasajero(servicio.Codcliente);
+                //var correos = await GetCorreosCancelarAsync(servicio.Empresa, servicio.Codusuario);
+                //var pasajero = await GetNombrePasajero(servicio.Codcliente);
 
-                foreach (var correo in correos)
-                {
-                    await EnviarCorreoCancelacionAsync(
-                        correo.Correo,
-                        pasajero.Apellidos,
-                        pasajero.Codlan,
-                        servicio.Tipo == "I" ? "Ingreso" : "Salida",
-                        servicio.Numero ?? "N/A",
-                        servicio.Fechaservicio ?? "",
-                        correo.Proveedor,
-                        servicio.Empresa ?? ""
-                    );
+                //foreach (var correo in correos)
+                //{
+                //    await EnviarCorreoCancelacionAsync(
+                //        correo.Correo,
+                //        pasajero.Apellidos,
+                //        pasajero.Codlan,
+                //        servicio.Tipo == "I" ? "Ingreso" : "Salida",
+                //        servicio.Numero ?? "N/A",
+                //        servicio.Fechaservicio ?? "",
+                //        correo.Proveedor,
+                //        servicio.Empresa ?? ""
+                //    );
 
-                    await Task.Delay(1000);
-                }
+                //    await Task.Delay(1000);
+                //}
             }
 
             return true;
