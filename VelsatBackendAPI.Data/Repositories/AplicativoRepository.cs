@@ -259,7 +259,7 @@ namespace VelsatMobile.Data.Repositories
             <table width='100%' cellpadding='0' cellspacing='0' style='background-color: #fff; padding: 20px; text-align: center;'>
                 <tr>
                     <td style='padding-bottom: 10px;'>
-                        <img src='https://res.cloudinary.com/dyc4ik1ko/image/upload/velsatLogo_n8ovrs.jpg' alt='Logo Velsat' style='max-width: 170px; height: auto;' />
+                        <img src='https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/ceb3f314-86db-4001-b613-39d2cca97600/public' alt='Logo Velsat' style='max-width: 170px; height: auto;' />
                     </td>
                 </tr>
                 <tr>
