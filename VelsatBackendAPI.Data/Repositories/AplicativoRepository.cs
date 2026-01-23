@@ -9,6 +9,7 @@ using System.Net.Mail;
 using System.Text;
 using System.Threading.Tasks;
 using VelsatMobile.Model;
+using VelsatMobile.Model.RastreoCelular;
 
 namespace VelsatMobile.Data.Repositories
 {
@@ -572,6 +573,31 @@ namespace VelsatMobile.Data.Repositories
                     Codservicio = codservicio
                 }
             );
+        }
+
+        //Rastreo con Celular
+        public async Task<int> InsertarTrama(List<TramaCelular> trama)
+        {
+            if (trama == null || !trama.Any())
+                return 0;
+
+            string sql = @"INSERT INTO eventdata (deviceID, fecha, codservicio, accountID, latitude, longitude, speedKPH, heading, address) VALUES (@DeviceID, @Fecha, @Codservicio, @AccountID, @Latitude, @Longitude, @SepeedKPH, @Heading, @Address)";
+
+            return await _defaultConnection.ExecuteAsync(sql, trama);
+        }
+
+        public async Task<int> UpdateTramaDevice(DeviceCelular trama)
+        {
+            string sql = @"UPDATE device SET accountID = @AccountID, lastValidLatitude = @LastValidLatitude, lastValidLongitude = @LastValidLongitude, lastValidHeading = @LastValidHeading, lastValidSpeed = @LastValidSpeed, lastValidDate = @LastValidDate, direccion = @Direccion WHERE deviceID = @DeviceID";
+
+            return await _defaultConnection.ExecuteAsync(sql, trama);
+        }
+
+        public async Task<DeviceCelular> GetLastTramaDevice(string deviceId)
+        {
+            string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE deviceID = @DeviceID";
+
+            return await _defaultConnection.QueryFirstOrDefaultAsync<DeviceCelular>(sql, new { DeviceID = deviceId });
         }
     }
 }

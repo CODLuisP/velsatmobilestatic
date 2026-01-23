@@ -2,6 +2,7 @@
 using VelsatBackendAPI.Data.Repositories;
 using VelsatMobile.Data.Repositories;
 using VelsatMobile.Model;
+using VelsatMobile.Model.RastreoCelular;
 
 namespace VelsatMobile.Controllers
 {
@@ -532,6 +533,111 @@ namespace VelsatMobile.Controllers
                     codservicio = codservicio,
                     pasajeros = ubicaciones
                 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        //Rastreo de Celular
+        [HttpPost("InsertarTrama")]
+        public async Task<IActionResult> InsertarTrama([FromBody] List<TramaCelular> trama)
+        {
+            try
+            {
+                if (trama == null || !trama.Any())
+                {
+                    return BadRequest("La lista de tramas no puede estar vacía.");
+                }
+
+                int filasAfectadas = await _uow.AplicativoRepository.InsertarTrama(trama);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Tramas insertadas correctamente.",
+                        filasInsertadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return Ok("No se insertaron tramas.");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpPut("UpdateTramaDevice")]
+        public async Task<IActionResult> UpdateTramaDevice([FromBody] DeviceCelular trama)
+        {
+            try
+            {
+                if (trama == null)
+                {
+                    return BadRequest("Los datos del dispositivo no pueden estar vacíos.");
+                }
+
+                if (string.IsNullOrWhiteSpace(trama.DeviceID))
+                {
+                    return BadRequest("El DeviceID es obligatorio.");
+                }
+
+                int filasAfectadas = await _uow.AplicativoRepository.UpdateTramaDevice(trama);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        message = "Dispositivo actualizado correctamente.",
+                        filasActualizadas = filasAfectadas
+                    });
+                }
+                else
+                {
+                    return NotFound($"No se encontró el dispositivo con DeviceID: {trama.DeviceID}");
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        [HttpGet("GetLastTrama")]
+        public async Task<IActionResult> GetLastTramaDevice([FromQuery] string deviceId)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(deviceId))
+                {
+                    return BadRequest("El DeviceID es obligatorio.");
+                }
+
+                var device = await _uow.AplicativoRepository.GetLastTramaDevice(deviceId);
+
+                if (device != null)
+                {
+                    return Ok(device);
+                }
+                else
+                {
+                    return NotFound($"No se encontró el dispositivo con DeviceID: {deviceId}");
+                }
             }
             catch (Exception ex)
             {

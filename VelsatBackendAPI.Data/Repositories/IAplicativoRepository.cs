@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Model;
 using VelsatMobile.Model;
+using VelsatMobile.Model.RastreoCelular;
 
 namespace VelsatMobile.Data.Repositories
 {
@@ -44,5 +45,13 @@ namespace VelsatMobile.Data.Repositories
         Task<int> PasajerosDisponibles(string codservicio);
 
         Task<IEnumerable<UbiPasajero>> UbiPasajeros(string codservicio);
+
+        //Rastreo con Celular
+        Task<int> InsertarTrama(List<TramaCelular> trama);
+
+        Task<int> UpdateTramaDevice(DeviceCelular trama);
+
+        Task<DeviceCelular> GetLastTramaDevice(string deviceId);
+
     }
 }
