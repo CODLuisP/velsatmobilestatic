@@ -444,12 +444,27 @@ namespace VelsatMobile.Data.Repositories
             DateTime horaPeruana = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, peruTimeZone);
 
             string sql = @"UPDATE servicio SET fechaini = @Fechaini, status = '2' WHERE codservicio = @Codservicio";
-            return await _defaultConnection.ExecuteAsync(sql,
+            int resultado = await _defaultConnection.ExecuteAsync(sql,
                 new
                 {
                     Fechaini = horaPeruana.ToString("dd/MM/yyyy HH:mm"),
                     Codservicio = codservicio
                 });
+
+            // Obtener DeviceID (unidad)
+            string sqlObtenerUnidad = @"SELECT unidad FROM servicio WHERE codservicio = @Codservicio";
+            string deviceID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sqlObtenerUnidad,
+                new { Codservicio = codservicio });
+
+            // Si unidad no es null, actualizar device
+            if (!string.IsNullOrEmpty(deviceID))
+            {
+                string sqlActualizarDevice = @"UPDATE device SET isservice = '1' WHERE deviceID = @DeviceID";
+                await _defaultConnection.ExecuteAsync(sqlActualizarDevice,
+                    new { DeviceID = deviceID });
+            }
+
+            return resultado;
         }
 
         public async Task<int> ActualizarTaxiServicio(string codservicio, string codtaxi)
@@ -469,12 +484,27 @@ namespace VelsatMobile.Data.Repositories
             DateTime horaPeruana = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, peruTimeZone);
 
             string sql = @"UPDATE servicio SET fechafin = @Fechafin, status = '3' WHERE codservicio = @Codservicio";
-            return await _defaultConnection.ExecuteAsync(sql,
+            int resultado = await _defaultConnection.ExecuteAsync(sql,
                 new
                 {
                     Fechafin = horaPeruana.ToString("dd/MM/yyyy HH:mm"),
                     Codservicio = codservicio
                 });
+
+            // Obtener DeviceID (unidad)
+            string sqlObtenerUnidad = @"SELECT unidad FROM servicio WHERE codservicio = @Codservicio";
+            string deviceID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sqlObtenerUnidad,
+                new { Codservicio = codservicio });
+
+            // Si unidad no es null, actualizar device
+            if (!string.IsNullOrEmpty(deviceID))
+            {
+                string sqlActualizarDevice = @"UPDATE device SET isservice = '0' WHERE deviceID = @DeviceID";
+                await _defaultConnection.ExecuteAsync(sqlActualizarDevice,
+                    new { DeviceID = deviceID });
+            }
+
+            return resultado;
         }
 
         public async Task<int> ActualizarTaxiFinServicio(string codtaxi)
@@ -583,7 +613,7 @@ namespace VelsatMobile.Data.Repositories
         //PARA CONSUMIR CADA 5 SEG CON POOLLING DE DEVICE
         public async Task<IEnumerable<DeviceCelular>> GetTramaDevice(string accountID)
         {
-            string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID";
+            string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID AND isservice = '1'";
 
             return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID });
         }

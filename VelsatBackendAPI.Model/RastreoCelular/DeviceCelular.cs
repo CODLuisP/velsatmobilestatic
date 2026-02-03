@@ -16,5 +16,6 @@ namespace VelsatMobile.Model.RastreoCelular
         public double LastValidSpeed { get; set; }
         public DateTime LastValidDate { get; set; }
         public string? Direccion { get; set; }
+        public char Isservice { get; set; }
     }
 }
