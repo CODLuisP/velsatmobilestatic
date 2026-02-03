@@ -561,16 +561,18 @@ namespace VelsatMobile.Data.Repositories
         }
 
         //Rastreo con Celular
+        //INSERTAR EN EVENTDATA
         public async Task<int> InsertarTrama(List<TramaCelular> trama)
         {
             if (trama == null || !trama.Any())
                 return 0;
 
-            string sql = @"INSERT INTO eventdata (deviceID, fecha, codservicio, accountID, latitude, longitude, speedKPH, heading, address) VALUES (@DeviceID, @Fecha, @Codservicio, @AccountID, @Latitude, @Longitude, @SepeedKPH, @Heading, @Address)";
+            string sql = @"INSERT INTO eventdata (deviceID, fecha, accountID, latitude, longitude, speedKPH, heading, address) VALUES (@DeviceID, @Fecha, @AccountID, @Latitude, @Longitude, @SpeedKPH, @Heading, @Address)";
 
             return await _defaultConnection.ExecuteAsync(sql, trama);
         }
 
+        //ACTUALIZAR EN DEVICE
         public async Task<int> UpdateTramaDevice(DeviceCelular trama)
         {
             string sql = @"UPDATE device SET accountID = @AccountID, lastValidLatitude = @LastValidLatitude, lastValidLongitude = @LastValidLongitude, lastValidHeading = @LastValidHeading, lastValidSpeed = @LastValidSpeed, lastValidDate = @LastValidDate, direccion = @Direccion WHERE deviceID = @DeviceID";
@@ -578,11 +580,20 @@ namespace VelsatMobile.Data.Repositories
             return await _defaultConnection.ExecuteAsync(sql, trama);
         }
 
-        public async Task<DeviceCelular> GetLastTramaDevice(string deviceId)
+        //PARA CONSUMIR CADA 5 SEG CON POOLLING DE DEVICE
+        public async Task<IEnumerable<DeviceCelular>> GetTramaDevice(string accountID)
         {
-            string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE deviceID = @DeviceID";
+            string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID";
 
-            return await _defaultConnection.QueryFirstOrDefaultAsync<DeviceCelular>(sql, new { DeviceID = deviceId });
+            return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID });
+        }
+
+        //PARA DETALLE RECORRIDO, DE EVENTDATA
+        public async Task<IEnumerable<TramaCelular>> GetTramaEventdata(string accountID, string deviceID, DateTime fechaini, DateTime fechafin)
+        {
+            string sql = @"SELECT accountID, deviceID, fecha, latitude, longitude, speedKPH, heading, address FROM eventdata WHERE accountID = @AccountID AND deviceID = @DeviceID AND fecha >= @Fechaini AND fecha <= @Fechafin";
+
+            return await _defaultConnection.QueryAsync<TramaCelular>(sql, new { AccountID = accountID, DeviceID = deviceID, Fechaini = fechaini, Fechafin = fechafin });
         }
     }
 }

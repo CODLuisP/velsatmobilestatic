@@ -10,11 +10,10 @@ namespace VelsatMobile.Model.RastreoCelular
     {
         public string DeviceID { get; set; }
         public DateTime Fecha { get; set; }
-        public string Codservicio { get; set; }
         public string AccountID { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
-        public double SepeedKPH { get; set; }
+        public double SpeedKPH { get; set; }
         public double Heading { get; set; }
         public string? Address { get; set; }
 

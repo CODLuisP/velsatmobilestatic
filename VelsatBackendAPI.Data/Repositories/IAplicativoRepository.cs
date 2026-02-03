@@ -51,7 +51,9 @@ namespace VelsatMobile.Data.Repositories
 
         Task<int> UpdateTramaDevice(DeviceCelular trama);
 
-        Task<DeviceCelular> GetLastTramaDevice(string deviceId);
+        Task<IEnumerable<DeviceCelular>> GetTramaDevice(string accountID);
+
+        Task<IEnumerable<TramaCelular>> GetTramaEventdata(string accountID, string deviceID, DateTime fechaini, DateTime fechafin);
 
     }
 }

@@ -618,7 +618,7 @@ namespace VelsatMobile.Controllers
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
-
+        
         [HttpGet("GetLastTrama")]
         public async Task<IActionResult> GetLastTramaDevice([FromQuery] string deviceId)
         {
@@ -629,7 +629,7 @@ namespace VelsatMobile.Controllers
                     return BadRequest("El DeviceID es obligatorio.");
                 }
 
-                var device = await _uow.AplicativoRepository.GetLastTramaDevice(deviceId);
+                var device = await _uow.AplicativoRepository.GetTramaDevice(deviceId);
 
                 if (device != null)
                 {
@@ -645,5 +645,33 @@ namespace VelsatMobile.Controllers
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
+
+        [HttpGet("RouteDetails")]
+        public async Task<IActionResult> GetTramaEventdata([FromQuery] string accountID, [FromQuery] string deviceID, [FromQuery] DateTime fechaini, [FromQuery] DateTime fechafin)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(accountID) || string.IsNullOrWhiteSpace(deviceID))
+                {
+                    return BadRequest("Faltan parámetros");
+                }
+
+                var device = await _uow.AplicativoRepository.GetTramaEventdata(accountID, deviceID, fechaini, fechafin);
+
+                if (device != null)
+                {
+                    return Ok(device);
+                }
+                else
+                {
+                    return NotFound($"No se encontró registros en las fechas seleccionadas");
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
     }
 }
