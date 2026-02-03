@@ -523,23 +523,23 @@ namespace VelsatMobile.Controllers
             }
         }
 
-        [HttpGet("UbiPasajeros/{codservicio}")]
-        public async Task<IActionResult> GetUbiPasajeros(string codservicio)
-        {
-            try
-            {
-                var ubicaciones = await _readOnlyUow.AplicativoRepository.UbiPasajeros(codservicio);
-                return Ok(new
-                {
-                    codservicio = codservicio,
-                    pasajeros = ubicaciones
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
-            }
-        }
+        //[HttpGet("UbiPasajeros/{codservicio}")]
+        //public async Task<IActionResult> GetUbiPasajeros(string codservicio)
+        //{
+        //    try
+        //    {
+        //        var ubicaciones = await _readOnlyUow.AplicativoRepository.UbiPasajeros(codservicio);
+        //        return Ok(new
+        //        {
+        //            codservicio = codservicio,
+        //            pasajeros = ubicaciones
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+        //    }
+        //}
 
         //Rastreo de Celular
         [HttpPost("InsertarTrama")]
