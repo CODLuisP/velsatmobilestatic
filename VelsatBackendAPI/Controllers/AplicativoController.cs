@@ -626,7 +626,7 @@ namespace VelsatMobile.Controllers
             {
                 if (string.IsNullOrWhiteSpace(accountID))
                 {
-                    return BadRequest("El DeviceID es obligatorio.");
+                    return BadRequest("El usuario es obligatorio.");
                 }
 
                 var device = await _uow.AplicativoRepository.GetTramaDevice(accountID);
@@ -637,7 +637,7 @@ namespace VelsatMobile.Controllers
                 }
                 else
                 {
-                    return NotFound($"No se encontró el dispositivo con DeviceID: {accountID}");
+                    return NotFound($"No se encontró unidades en el usuario: {accountID}");
                 }
             }
             catch (Exception ex)
