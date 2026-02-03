@@ -620,16 +620,16 @@ namespace VelsatMobile.Controllers
         }
         
         [HttpGet("GetLastTrama")]
-        public async Task<IActionResult> GetLastTramaDevice([FromQuery] string deviceId)
+        public async Task<IActionResult> GetLastTramaDevice([FromQuery] string accountID)
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(deviceId))
+                if (string.IsNullOrWhiteSpace(accountID))
                 {
                     return BadRequest("El DeviceID es obligatorio.");
                 }
 
-                var device = await _uow.AplicativoRepository.GetTramaDevice(deviceId);
+                var device = await _uow.AplicativoRepository.GetTramaDevice(accountID);
 
                 if (device != null)
                 {
@@ -637,7 +637,7 @@ namespace VelsatMobile.Controllers
                 }
                 else
                 {
-                    return NotFound($"No se encontró el dispositivo con DeviceID: {deviceId}");
+                    return NotFound($"No se encontró el dispositivo con DeviceID: {accountID}");
                 }
             }
             catch (Exception ex)
