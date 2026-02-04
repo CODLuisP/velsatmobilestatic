@@ -32,7 +32,7 @@ namespace VelsatBackendAPI.Controllers
             }
 
             // Validar que el tipo sea válido
-            if (request.Tipo != 'n' && request.Tipo != 'c' && request.Tipo != 'p')
+            if (request.Tipo != 'n' && request.Tipo != 'c' && request.Tipo != 'p' && request.Tipo != 'r')
             {
                 return BadRequest("Tipo de usuario no válido");
             }
