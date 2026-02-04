@@ -31,7 +31,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     FROM cliente 
                     WHERE codlan = @AccountID",
 
-                'c' => @"
+                'c' or 'r' => @"
                     SELECT apellidos, nombres, dni, telefono, login 
                     FROM taxi 
                     WHERE login = @AccountID",
@@ -130,7 +130,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     FROM cliente 
                     WHERE codlan = @Login AND clave = @Clave AND estadocuenta = 'A'",
 
-                'c' => @"
+                'c' or 'r' => @"
                     SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password, 
                            CONCAT(apellidos, ' ', nombres) AS Description 
                     FROM taxi 
