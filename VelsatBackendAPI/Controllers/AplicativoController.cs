@@ -646,6 +646,33 @@ namespace VelsatMobile.Controllers
             }
         }
 
+        [HttpGet("GetTramaMitsubishi")]
+        public async Task<IActionResult> GetTramaDeviceMitsubishi([FromQuery] string accountID)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(accountID))
+                {
+                    return BadRequest("El usuario es obligatorio.");
+                }
+
+                var device = await _uow.AplicativoRepository.GetTramaDeviceMitsubishi(accountID);
+
+                if (device != null)
+                {
+                    return Ok(device);
+                }
+                else
+                {
+                    return NotFound($"No se encontró unidades en el usuario: {accountID}");
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
         [HttpGet("RouteDetails")]
         public async Task<IActionResult> GetTramaEventdata([FromQuery] string accountID, [FromQuery] string deviceID, [FromQuery] DateTime fechaini, [FromQuery] DateTime fechafin)
         {

@@ -260,7 +260,7 @@ namespace VelsatMobile.Data.Repositories
             <table width='100%' cellpadding='0' cellspacing='0' style='background-color: #fff; padding: 20px; text-align: center;'>
                 <tr>
                     <td style='padding-bottom: 10px;'>
-                        <img src='https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/ceb3f314-86db-4001-b613-39d2cca97600/public' alt='Logo Velsat' style='max-width: 170px; height: auto;' />
+                        <img src='' alt='Logo Velsat' style='max-width: 170px; height: auto;' />
                     </td>
                 </tr>
                 <tr>
@@ -614,6 +614,14 @@ namespace VelsatMobile.Data.Repositories
         public async Task<IEnumerable<DeviceCelular>> GetTramaDevice(string accountID)
         {
             string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID AND isservice = '1'";
+
+            return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID });
+        }
+
+        //PARA CONSUMIR CADA 5 SEG CON POOLLING DE DEVICE MITSUBISHI
+        public async Task<IEnumerable<DeviceCelular>> GetTramaDeviceMitsubishi(string accountID)
+        {
+            string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID";
 
             return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID });
         }
