@@ -38,6 +38,8 @@ namespace VelsatMobile.Data.Repositories
         Task<int> ActualizarFechaFinServicio(string codservicio);
         Task<int> ActualizarTaxiFinServicio(string codtaxi);
 
+        Task<string> GetEstadoServicio(string codservicio);
+
         Task<int> SubirPasajero(string codpedido);
 
         Task<int> BajarPasajero(string codpedido);

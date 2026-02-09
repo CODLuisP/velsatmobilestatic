@@ -444,6 +444,28 @@ namespace VelsatMobile.Controllers
             }
         }
 
+        [HttpGet("GetEstadoServicio")]
+        public async Task<IActionResult> GetEstadoServicio([FromQuery] string codservicio)
+        {
+            try
+            {
+                string estado = await _uow.AplicativoRepository.GetEstadoServicio(codservicio);
+
+                if (estado != null)
+                {
+                    return Ok(estado);
+                }
+                else
+                {
+                    return NotFound("Servicio no encontrado.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
         [HttpPost("SubirPasajero")]
         public async Task<IActionResult> SubirPasajero([FromQuery] string codpedido)
         {
