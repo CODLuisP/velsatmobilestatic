@@ -449,8 +449,20 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Fechaini = horaPeruana.ToString("dd/MM/yyyy HH:mm"),
                     Codservicio = codservicio
-                }
-            );
+                });
+
+            // Obtener DeviceID (unidad)
+            string sqlObtenerUnidad = @"SELECT unidad FROM servicio WHERE codservicio = @Codservicio";
+            string deviceID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sqlObtenerUnidad,
+                new { Codservicio = codservicio });
+
+            // Si unidad no es null, actualizar device
+            if (!string.IsNullOrEmpty(deviceID))
+            {
+                string sqlActualizarDevice = @"UPDATE device SET isservice = '1' WHERE deviceID = @DeviceID";
+                await _defaultConnection.ExecuteAsync(sqlActualizarDevice,
+                    new { DeviceID = deviceID });
+            }
 
             return resultado;
         }
@@ -478,8 +490,20 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Fechafin = horaPeruana.ToString("dd/MM/yyyy HH:mm"),
                     Codservicio = codservicio
-                }
-             );
+                });
+
+            // Obtener DeviceID (unidad)
+            string sqlObtenerUnidad = @"SELECT unidad FROM servicio WHERE codservicio = @Codservicio";
+            string deviceID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sqlObtenerUnidad,
+                new { Codservicio = codservicio });
+
+            // Si unidad no es null, actualizar device
+            if (!string.IsNullOrEmpty(deviceID))
+            {
+                string sqlActualizarDevice = @"UPDATE device SET isservice = '0' WHERE deviceID = @DeviceID";
+                await _defaultConnection.ExecuteAsync(sqlActualizarDevice,
+                    new { DeviceID = deviceID });
+            }
 
             return resultado;
         }
