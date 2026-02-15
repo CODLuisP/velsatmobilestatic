@@ -14,9 +14,13 @@ namespace VelsatBackendAPI.Data.Repositories
     public class UnitOfWork : IUnitOfWork, IDisposable
     {
         private readonly string _defaultConnectionString;
+        private readonly string _secondConnectionString;
 
         private MySqlConnection _defaultConnection;
         private MySqlTransaction _defaultTransaction;
+
+        private MySqlConnection _secondConnection;
+        private MySqlTransaction _secondTransaction;
 
         private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
         private readonly Lazy<IUserRepository> _userRepository;
@@ -31,8 +35,11 @@ namespace VelsatBackendAPI.Data.Repositories
             _defaultConnectionString = configuration.DefaultConnection
                 ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
 
+            _secondConnectionString = configuration.SecondConnection
+                ?? throw new ArgumentNullException(nameof(configuration.SecondConnection));
+
             _aplicativoRepository = new Lazy<IAplicativoRepository>(() =>
-                new AplicativoRepository(DefaultConnection, _defaultTransaction));
+                new AplicativoRepository(DefaultConnection, _defaultTransaction, SecondConnection, _secondTransaction));
 
             _userRepository = new Lazy<IUserRepository>(() =>
                new UserRepository(DefaultConnection, _defaultTransaction));
@@ -64,6 +71,35 @@ namespace VelsatBackendAPI.Data.Repositories
                     }
                 }
                 return _defaultConnection;
+            }
+        }
+
+        private MySqlConnection SecondConnection
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+
+                if (_secondConnection == null)
+                {
+                    lock (_lockObject)
+                    {
+                        if (_secondConnection == null)
+                        {
+                            // ✅ CAMBIO: Usar método con retry
+                            _secondConnection = OpenConnectionWithRetry(
+                                _secondConnectionString,
+                                "SECOND (con transacción)");
+
+                            // Iniciar transacción DESPUÉS de abrir la conexión exitosamente
+                            _secondTransaction = _secondConnection.BeginTransaction();
+
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[UnitOfWork] Transacción SECOND iniciada");
+                        }
+                    }
+                }
+                return _secondConnection;
             }
         }
 

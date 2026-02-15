@@ -5,18 +5,26 @@ namespace VelsatBackendAPI.Data
 {
     public class MySqlConfiguration
     {
-        public MySqlConfiguration(string defaultConnection)
+        public MySqlConfiguration(string defaultConnection, string secondConnection)
         {
             // ✅ Validar que no sea nula o vacía
             if (string.IsNullOrWhiteSpace(defaultConnection))
                 throw new ArgumentNullException(nameof(defaultConnection),
                     "La cadena de conexión por defecto no puede estar vacía");
 
+            if (string.IsNullOrWhiteSpace(secondConnection))
+                throw new ArgumentNullException(nameof(secondConnection),
+                    "La cadena de conexión secundaria no puede estar vacía");
+
             // ✅ NORMALIZAR la connection string para evitar duplicados en el pool
             DefaultConnection = NormalizeConnectionString(defaultConnection);
+            SecondConnection = NormalizeConnectionString(secondConnection);
+
         }
 
         public string DefaultConnection { get; set; }
+        public string SecondConnection { get; set; }
+
 
         /// <summary>
         /// Normaliza una connection string para garantizar formato consistente.

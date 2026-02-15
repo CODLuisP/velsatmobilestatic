@@ -13,8 +13,10 @@ namespace VelsatMobile.Data.Repositories
     public class ReadOnlyUnitOfWork : IReadOnlyUnitOfWork
     {
         private readonly string _defaultConnectionString;
+        private readonly string _secondConnectionString;
 
         private MySqlConnection _defaultConnection;
+        private MySqlConnection _secondConnection;
 
         private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
         private readonly Lazy<IUserRepository> _userRepository;
@@ -28,8 +30,11 @@ namespace VelsatMobile.Data.Repositories
             _defaultConnectionString = configuration.DefaultConnection
                 ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
 
+            _secondConnectionString = configuration.DefaultConnection
+                ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
+
             // ✅ Inicializar servicio SIN transacción (segundo parámetro = null)
-            _aplicativoRepository = new Lazy<IAplicativoRepository>(() => new AplicativoRepository(DefaultConnection, null));
+            _aplicativoRepository = new Lazy<IAplicativoRepository>(() => new AplicativoRepository(DefaultConnection, null, SecondConnection, null));
 
             _userRepository = new Lazy<IUserRepository>(() => new UserRepository(DefaultConnection, null));
 
@@ -77,6 +82,52 @@ namespace VelsatMobile.Data.Repositories
                     }
 
                     return _defaultConnection;
+                }
+            }
+        }
+
+        private MySqlConnection SecondConnection
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+
+                lock (_lockObject)
+                {
+                    // ✅ CRÍTICO: Validar estado de la conexión SIEMPRE
+                    if (_secondConnection == null ||
+                        _secondConnection.State == ConnectionState.Closed ||
+                        _secondConnection.State == ConnectionState.Broken)
+                    {
+                        // Si existe una conexión rota, limpiarla primero
+                        if (_secondConnection != null)
+                        {
+                            try
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"[ReadOnlyUnitOfWork] ⚠️ Conexión SECOND en estado {_secondConnection.State}, recreando...");
+                                _secondConnection.Close();
+                                _secondConnection.Dispose();
+                            }
+                            catch { }
+                            _secondConnection = null;
+                        }
+
+                        _secondConnection = OpenConnectionWithRetry(
+                            _secondConnectionString,
+                            "SECOND",
+                            maxRetries: 3);
+                    }
+                    else if (_secondConnection.State == ConnectionState.Connecting ||
+                             _secondConnection.State == ConnectionState.Executing ||
+                             _secondConnection.State == ConnectionState.Fetching)
+                    {
+                        // Esperar un poco si está ocupada
+                        System.Threading.Thread.Sleep(100);
+                    }
+
+                    return _secondConnection;
                 }
             }
         }

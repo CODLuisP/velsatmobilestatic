@@ -707,7 +707,7 @@ namespace VelsatMobile.Controllers
 
                 var device = await _uow.AplicativoRepository.GetTramaEventdata(accountID, deviceID, fechaini, fechafin);
 
-                if (device != null)
+                if (device != null && device.Any())
                 {
                     return Ok(device);
                 }

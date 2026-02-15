@@ -19,11 +19,14 @@ namespace VelsatMobile.Data.Repositories
     public class AplicativoRepository : IAplicativoRepository
     {
         private readonly IDbConnection _defaultConnection; IDbTransaction _defaultTransaction;
+        private readonly IDbConnection _secondConnection; IDbTransaction _secondTransaction;
 
-        public AplicativoRepository(IDbConnection defaultconnection, IDbTransaction defaulttransaction)
+        public AplicativoRepository(IDbConnection defaultconnection, IDbTransaction defaulttransaction, IDbConnection secondConnection, IDbTransaction secondtransaction)
         {
             _defaultConnection = defaultconnection;
             _defaultTransaction = defaulttransaction;
+            _secondConnection = secondConnection;
+            _secondTransaction = secondtransaction;
         }
 
         //SERVICIOS PASAJERO
@@ -449,19 +452,19 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Fechaini = horaPeruana.ToString("dd/MM/yyyy HH:mm"),
                     Codservicio = codservicio
-                });
+                }, transaction: _defaultTransaction);
 
             // Obtener DeviceID (unidad)
             string sqlObtenerUnidad = @"SELECT unidad FROM servicio WHERE codservicio = @Codservicio";
             string deviceID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sqlObtenerUnidad,
-                new { Codservicio = codservicio });
+                new { Codservicio = codservicio }, transaction: _defaultTransaction);
 
             // Si unidad no es null, actualizar device
             if (!string.IsNullOrEmpty(deviceID))
             {
                 string sqlActualizarDevice = @"UPDATE device SET isservice = '1' WHERE deviceID = @DeviceID";
                 await _defaultConnection.ExecuteAsync(sqlActualizarDevice,
-                    new { DeviceID = deviceID });
+                    new { DeviceID = deviceID }, transaction: _defaultTransaction);
             }
 
             return resultado;
@@ -475,7 +478,7 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Servicioactual = codservicio,
                     Codtaxi = int.Parse(codtaxi)
-                }
+                }, transaction: _defaultTransaction
             );
         }
 
@@ -490,19 +493,19 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Fechafin = horaPeruana.ToString("dd/MM/yyyy HH:mm"),
                     Codservicio = codservicio
-                });
+                }, transaction: _defaultTransaction);
 
             // Obtener DeviceID (unidad)
             string sqlObtenerUnidad = @"SELECT unidad FROM servicio WHERE codservicio = @Codservicio";
             string deviceID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sqlObtenerUnidad,
-                new { Codservicio = codservicio });
+                new { Codservicio = codservicio }, transaction: _defaultTransaction);
 
             // Si unidad no es null, actualizar device
             if (!string.IsNullOrEmpty(deviceID))
             {
                 string sqlActualizarDevice = @"UPDATE device SET isservice = '0' WHERE deviceID = @DeviceID";
                 await _defaultConnection.ExecuteAsync(sqlActualizarDevice,
-                    new { DeviceID = deviceID });
+                    new { DeviceID = deviceID }, transaction: _defaultTransaction);
             }
 
             return resultado;
@@ -515,7 +518,7 @@ namespace VelsatMobile.Data.Repositories
                 new
                 {
                     Codtaxi = int.Parse(codtaxi)
-                });
+                }, transaction: _defaultTransaction);
         }
 
         public async Task<string> GetEstadoServicio(string codservicio)
@@ -525,7 +528,7 @@ namespace VelsatMobile.Data.Repositories
                 new
                 {
                     Codservicio = int.Parse(codservicio)
-                });
+                }, transaction: _defaultTransaction);
         }
 
         public async Task<int> SubirPasajero(string codpedido)
@@ -540,7 +543,7 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Fechaini = fechaFormateada,
                     Codpedido = int.Parse(codpedido)
-                }
+                }, transaction: _defaultTransaction
             );
         }
 
@@ -556,7 +559,7 @@ namespace VelsatMobile.Data.Repositories
                 {
                     Fechafin = fechaFormateada,
                     Codpedido = int.Parse(codpedido)
-                }
+                }, transaction: _defaultTransaction
             );
         }
 
@@ -575,7 +578,7 @@ namespace VelsatMobile.Data.Repositories
                 new
                 {
                     Codservicio = codservicio
-                }
+                }, transaction: _defaultTransaction
             );
         }
 
@@ -597,7 +600,7 @@ namespace VelsatMobile.Data.Repositories
                 new
                 {
                     Codservicio = codservicio
-                }
+                }, transaction: _defaultTransaction
             );
         }
 
@@ -610,7 +613,7 @@ namespace VelsatMobile.Data.Repositories
 
             string sql = @"INSERT INTO eventdata (deviceID, fecha, accountID, latitude, longitude, speedKPH, heading, address) VALUES (@DeviceID, @Fecha, @AccountID, @Latitude, @Longitude, @SpeedKPH, @Heading, @Address)";
 
-            return await _defaultConnection.ExecuteAsync(sql, trama);
+            return await _defaultConnection.ExecuteAsync(sql, trama, transaction: _defaultTransaction);
         }
 
         //ACTUALIZAR EN DEVICE
@@ -618,7 +621,7 @@ namespace VelsatMobile.Data.Repositories
         {
             string sql = @"UPDATE device SET accountID = @AccountID, lastValidLatitude = @LastValidLatitude, lastValidLongitude = @LastValidLongitude, lastValidHeading = @LastValidHeading, lastValidSpeed = @LastValidSpeed, lastValidDate = @LastValidDate, direccion = @Direccion WHERE deviceID = @DeviceID";
 
-            return await _defaultConnection.ExecuteAsync(sql, trama);
+            return await _defaultConnection.ExecuteAsync(sql, trama, transaction: _defaultTransaction);
         }
 
         //PARA CONSUMIR CADA 5 SEG CON POOLLING DE DEVICE
@@ -626,7 +629,7 @@ namespace VelsatMobile.Data.Repositories
         {
             string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID AND isservice = '1'";
 
-            return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID });
+            return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID }, transaction: _defaultTransaction);
         }
 
         //PARA CONSUMIR CADA 5 SEG CON POOLLING DE DEVICE MITSUBISHI
@@ -634,15 +637,80 @@ namespace VelsatMobile.Data.Repositories
         {
             string sql = @"SELECT deviceID, accountID, lastValidLatitude, lastValidLongitude, lastValidHeading, lastValidSpeed, lastValidDate, direccion FROM device WHERE accountID = @AccountID";
 
-            return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID });
+            return await _defaultConnection.QueryAsync<DeviceCelular>(sql, new { AccountID = accountID }, transaction: _defaultTransaction);
         }
 
         //PARA DETALLE RECORRIDO, DE EVENTDATA
         public async Task<IEnumerable<TramaCelular>> GetTramaEventdata(string accountID, string deviceID, DateTime fechaini, DateTime fechafin)
         {
-            string sql = @"SELECT accountID, deviceID, fecha, latitude, longitude, speedKPH, heading, address FROM eventdata WHERE accountID = @AccountID AND deviceID = @DeviceID AND fecha >= @Fechaini AND fecha <= @Fechafin";
+            // 1. Buscar accountID desde device si es necesario
+            const string sqlAccountFromDevice = "SELECT accountID FROM device WHERE deviceID = @DeviceID";
+            var newAccountID = await _defaultConnection.QueryFirstOrDefaultAsync<string>(
+                sqlAccountFromDevice,
+                new { DeviceID = deviceID },
+                transaction: _defaultTransaction);
 
-            return await _defaultConnection.QueryAsync<TramaCelular>(sql, new { AccountID = accountID, DeviceID = deviceID, Fechaini = fechaini, Fechafin = fechafin });
+            if (!string.IsNullOrEmpty(newAccountID))
+            {
+                accountID = newAccountID;
+            }
+            else if (string.IsNullOrEmpty(accountID))
+            {
+                return Enumerable.Empty<TramaCelular>();
+            }
+
+            // 2. Buscar tablas históricas que contengan datos en el rango de fechas
+            const string sqlHistoricos = "SELECT tabla FROM historicos WHERE timeini <= @Fechafin AND timefin >= @Fechaini";
+
+            var nombresTablas = (await _defaultConnection.QueryAsync<string>(
+                sqlHistoricos,
+                new { Fechaini = fechaini, Fechafin = fechafin },
+                transaction: _defaultTransaction)).ToList();
+
+            var listaTotalDatos = new List<TramaCelular>();
+
+            // 3. Si NO hay tablas históricas, consultar solo eventdata
+            if (nombresTablas.Count == 0)
+            {
+                string sqlEventData = @"
+            SELECT accountID, deviceID, fecha, latitude, longitude, speedKPH, heading, address 
+            FROM eventdata 
+            WHERE accountID = @AccountID 
+              AND deviceID = @DeviceID 
+              AND fecha BETWEEN @Fechaini AND @Fechafin
+            ORDER BY fecha";
+
+                var datosEventData = await _defaultConnection.QueryAsync<TramaCelular>(
+                    sqlEventData,
+                    new { AccountID = accountID, DeviceID = deviceID, Fechaini = fechaini, Fechafin = fechafin },
+                    transaction: _defaultTransaction);
+
+                listaTotalDatos.AddRange(datosEventData);
+            }
+            // 4. Si hay tablas históricas, consultar cada una
+            else
+            {
+                foreach (var nombreTabla in nombresTablas)
+                {
+                    string sqlHistorica = $@"
+                SELECT accountID, deviceID, fecha, latitude, longitude, speedKPH, heading, address 
+                FROM {nombreTabla} 
+                WHERE accountID = @AccountID 
+                  AND deviceID = @DeviceID 
+                  AND fecha BETWEEN @Fechaini AND @Fechafin
+                ORDER BY fecha";
+
+                    var datosTabla = await _secondConnection.QueryAsync<TramaCelular>(
+                        sqlHistorica,
+                        new { AccountID = accountID, DeviceID = deviceID, Fechaini = fechaini, Fechafin = fechafin },
+                        transaction: _secondTransaction);
+
+                    listaTotalDatos.AddRange(datosTabla);
+                }
+            }
+
+            // 5. Ordenar todos los datos por fecha (por si vienen de múltiples tablas)
+            return listaTotalDatos.OrderBy(x => x.Fecha);
         }
     }
 }

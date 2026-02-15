@@ -48,15 +48,23 @@ builder.Services.AddSwaggerGen();
 // 🔧 VALIDACIÓN DE CONNECTION STRINGS
 // ═══════════════════════════════════════════════════════════════
 var defaultConn = builder.Configuration.GetConnectionString("DefaultConnection");
+var secondConn = builder.Configuration.GetConnectionString("SecondConnection");
+
 
 if (string.IsNullOrEmpty(defaultConn))
 {
     throw new InvalidOperationException("❌ DefaultConnection string not found in configuration");
 }
 
-Console.WriteLine($"✅ DefaultConnection configurado correctamente");
+if (string.IsNullOrEmpty(secondConn))
+{
+    throw new InvalidOperationException("❌ SecondConnection string not found in configuration");
+}
 
-var mysqlConfiguration = new MySqlConfiguration(defaultConn);
+Console.WriteLine($"✅ DefaultConnection configurado correctamente");
+Console.WriteLine($"✅ SecondConnection configurado correctamente");
+
+var mysqlConfiguration = new MySqlConfiguration(defaultConn, secondConn);
 builder.Services.AddSingleton(mysqlConfiguration);
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
