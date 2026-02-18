@@ -25,7 +25,6 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
         private readonly Lazy<IUserRepository> _userRepository;
 
-
         private bool _disposed = false;
         private bool _committed = false;
         private readonly object _lockObject = new object();
@@ -57,12 +56,10 @@ namespace VelsatBackendAPI.Data.Repositories
                     {
                         if (_defaultConnection == null)
                         {
-                            // ✅ CAMBIO: Usar método con retry
                             _defaultConnection = OpenConnectionWithRetry(
                                 _defaultConnectionString,
                                 "DEFAULT (con transacción)");
 
-                            // Iniciar transacción DESPUÉS de abrir la conexión exitosamente
                             _defaultTransaction = _defaultConnection.BeginTransaction();
 
                             System.Diagnostics.Debug.WriteLine(
@@ -86,12 +83,10 @@ namespace VelsatBackendAPI.Data.Repositories
                     {
                         if (_secondConnection == null)
                         {
-                            // ✅ CAMBIO: Usar método con retry
                             _secondConnection = OpenConnectionWithRetry(
                                 _secondConnectionString,
                                 "SECOND (con transacción)");
 
-                            // Iniciar transacción DESPUÉS de abrir la conexión exitosamente
                             _secondTransaction = _secondConnection.BeginTransaction();
 
                             System.Diagnostics.Debug.WriteLine(
@@ -118,9 +113,6 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
-        /// <summary>
-        /// Abre una conexión MySQL con reintentos automáticos en caso de colisión de pool.
-        /// </summary>
         private MySqlConnection OpenConnectionWithRetry(
             string connectionString,
             string connectionName,
@@ -135,7 +127,6 @@ namespace VelsatBackendAPI.Data.Repositories
                     var connection = new MySqlConnection(connectionString);
                     connection.Open();
 
-                    // ✅ CRÍTICO: Configurar charset UTF-8 inmediatamente después de abrir
                     using (var cmd = new MySqlCommand("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", connection))
                     {
                         cmd.ExecuteNonQuery();
@@ -159,33 +150,26 @@ namespace VelsatBackendAPI.Data.Repositories
 
                     if (attempt < maxRetries - 1)
                     {
-                        // Backoff exponencial: 10ms, 20ms, 40ms, 80ms, 160ms
                         int delayMs = 10 * (int)Math.Pow(2, attempt);
                         System.Threading.Thread.Sleep(delayMs);
 
-                        // ✅ CRÍTICO: Intentar limpiar el pool antes de reintentar
                         try
                         {
                             MySqlConnection.ClearPool(new MySqlConnection(connectionString));
                             System.Diagnostics.Debug.WriteLine(
                                 $"[UnitOfWork] Pool {connectionName} limpiado");
                         }
-                        catch
-                        {
-                            // Ignorar errores al limpiar
-                        }
+                        catch { }
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Otros errores no relacionados con el pool - fallar inmediatamente
                     System.Diagnostics.Debug.WriteLine(
                         $"[UnitOfWork] ❌ Error abriendo {connectionName}: {ex.Message}");
                     throw;
                 }
             }
 
-            // Si llegamos aquí, fallaron todos los intentos
             throw new InvalidOperationException(
                 $"No se pudo abrir la conexión {connectionName} después de {maxRetries} intentos. " +
                 $"Pool de conexiones MySQL posiblemente corrupto.",
@@ -198,7 +182,6 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 ValidateNotDisposedOrCommitted();
                 return _aplicativoRepository.Value;
-
             }
         }
 
@@ -211,28 +194,27 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
-
         public void SaveChanges()
         {
             ValidateNotDisposedOrCommitted();
-
             lock (_lockObject)
             {
                 try
                 {
-                    // Commit de las transacciones
+                    // ✅ CORREGIDO: Commit de AMBAS transacciones
                     _defaultTransaction?.Commit();
+                    _secondTransaction?.Commit();
                     _committed = true;
                 }
                 catch
                 {
-                    // Rollback en caso de error
+                    // ✅ CORREGIDO: Rollback de AMBAS en caso de error
                     try { _defaultTransaction?.Rollback(); } catch { }
+                    try { _secondTransaction?.Rollback(); } catch { }
                     throw;
                 }
                 finally
                 {
-                    // ✅ CRÍTICO: Liberar TODO inmediatamente después de commit
                     DisposeTransactionsAndConnections();
                 }
             }
@@ -240,49 +222,42 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private void DisposeTransactionsAndConnections()
         {
-            // Liberar transacciones
+            // ✅ CORREGIDO: Liberar AMBAS transacciones
             if (_defaultTransaction != null)
             {
                 _defaultTransaction.Dispose();
                 _defaultTransaction = null;
             }
 
-            // ✅ Cerrar Y disponer conexiones inmediatamente
-            if (_defaultConnection != null)
+            if (_secondTransaction != null)
             {
-                try
-                {
-                    if (_defaultConnection.State == ConnectionState.Open)
-                    {
-                        _defaultConnection.Close();
-                    }
-                    _defaultConnection.Dispose();
-                }
-                catch { }
-                finally
-                {
-                    _defaultConnection = null;
-                }
+                _secondTransaction.Dispose();
+                _secondTransaction = null;
             }
 
-            // ✅ NUEVO: Sugerir al GC que limpie inmediatamente (opcional, solo si hay problemas graves)
-            // GC.Collect(0, GCCollectionMode.Optimized);
+            // ✅ CORREGIDO: Cerrar AMBAS conexiones
+            if (_defaultConnection != null)
+            {
+                try { _defaultConnection.Close(); _defaultConnection.Dispose(); } catch { }
+                _defaultConnection = null;
+            }
+
+            if (_secondConnection != null)
+            {
+                try { _secondConnection.Close(); _secondConnection.Dispose(); } catch { }
+                _secondConnection = null;
+            }
         }
 
-        // ✅ Dispose optimizado
         public void Dispose()
         {
             Dispose(true);
-            // ✅ REMOVIDO el finalizer, así que esto ya no es necesario
-            // GC.SuppressFinalize(this);
         }
 
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed)
-            {
-                return; // Ya fue liberado
-            }
+                return;
 
             if (disposing)
             {
@@ -290,9 +265,9 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     try
                     {
-                        // ✅ MEJORADO: Rollback solo si la transacción está activa
                         if (!_committed)
                         {
+                            // ✅ CORREGIDO: Rollback de AMBAS transacciones en Dispose
                             try
                             {
                                 if (_defaultTransaction != null && _defaultTransaction.Connection != null)
@@ -302,17 +277,23 @@ namespace VelsatBackendAPI.Data.Repositories
                             {
                                 System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Rollback default error: {ex.Message}");
                             }
+
+                            try
+                            {
+                                if (_secondTransaction != null && _secondTransaction.Connection != null)
+                                    _secondTransaction.Rollback();
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Rollback second error: {ex.Message}");
+                            }
                         }
 
-                        // Liberar todo
                         DisposeTransactionsAndConnections();
-
-                        // Disponer repositorios si implementan IDisposable
                         DisposeRepositories();
                     }
                     catch (Exception ex)
                     {
-                        // Log el error pero no lanzar excepciones en Dispose
                         System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Error disposing: {ex.Message}");
                     }
                     finally
@@ -325,7 +306,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private void DisposeRepositories()
         {
-            // Solo disponer si fueron inicializados
             TryDisposeRepository(_aplicativoRepository);
         }
 
@@ -333,14 +313,8 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             if (lazyRepo != null && lazyRepo.IsValueCreated && lazyRepo.Value is IDisposable disposable)
             {
-                try
-                {
-                    disposable.Dispose();
-                }
-                catch
-                {
-                    // Ignorar errores al disponer repositorios
-                }
+                try { disposable.Dispose(); }
+                catch { }
             }
         }
     }

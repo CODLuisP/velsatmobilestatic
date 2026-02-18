@@ -21,7 +21,6 @@ namespace VelsatMobile.Data.Repositories
         private readonly Lazy<IAplicativoRepository> _aplicativoRepository;
         private readonly Lazy<IUserRepository> _userRepository;
 
-
         private bool _disposed = false;
         private readonly object _lockObject = new object();
 
@@ -30,14 +29,15 @@ namespace VelsatMobile.Data.Repositories
             _defaultConnectionString = configuration.DefaultConnection
                 ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
 
-            _secondConnectionString = configuration.DefaultConnection
-                ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
+            // ✅ CORREGIDO: Estaba usando DefaultConnection en lugar de SecondConnection
+            _secondConnectionString = configuration.SecondConnection
+                ?? throw new ArgumentNullException(nameof(configuration.SecondConnection));
 
-            // ✅ Inicializar servicio SIN transacción (segundo parámetro = null)
-            _aplicativoRepository = new Lazy<IAplicativoRepository>(() => new AplicativoRepository(DefaultConnection, null, SecondConnection, null));
+            _aplicativoRepository = new Lazy<IAplicativoRepository>(() =>
+                new AplicativoRepository(DefaultConnection, null, SecondConnection, null));
 
-            _userRepository = new Lazy<IUserRepository>(() => new UserRepository(DefaultConnection, null));
-
+            _userRepository = new Lazy<IUserRepository>(() =>
+                new UserRepository(DefaultConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -49,35 +49,22 @@ namespace VelsatMobile.Data.Repositories
 
                 lock (_lockObject)
                 {
-                    // ✅ CRÍTICO: Validar estado de la conexión SIEMPRE
                     if (_defaultConnection == null ||
                         _defaultConnection.State == ConnectionState.Closed ||
                         _defaultConnection.State == ConnectionState.Broken)
                     {
-                        // Si existe una conexión rota, limpiarla primero
                         if (_defaultConnection != null)
                         {
-                            try
-                            {
-                                System.Diagnostics.Debug.WriteLine(
-                                    $"[ReadOnlyUnitOfWork] ⚠️ Conexión DEFAULT en estado {_defaultConnection.State}, recreando...");
-                                _defaultConnection.Close();
-                                _defaultConnection.Dispose();
-                            }
-                            catch { }
+                            try { _defaultConnection.Close(); _defaultConnection.Dispose(); } catch { }
                             _defaultConnection = null;
                         }
 
-                        _defaultConnection = OpenConnectionWithRetry(
-                            _defaultConnectionString,
-                            "DEFAULT",
-                            maxRetries: 3);
+                        _defaultConnection = OpenConnectionWithRetry(_defaultConnectionString, "DEFAULT", maxRetries: 3);
                     }
                     else if (_defaultConnection.State == ConnectionState.Connecting ||
                              _defaultConnection.State == ConnectionState.Executing ||
                              _defaultConnection.State == ConnectionState.Fetching)
                     {
-                        // Esperar un poco si está ocupada
                         System.Threading.Thread.Sleep(100);
                     }
 
@@ -95,35 +82,22 @@ namespace VelsatMobile.Data.Repositories
 
                 lock (_lockObject)
                 {
-                    // ✅ CRÍTICO: Validar estado de la conexión SIEMPRE
                     if (_secondConnection == null ||
                         _secondConnection.State == ConnectionState.Closed ||
                         _secondConnection.State == ConnectionState.Broken)
                     {
-                        // Si existe una conexión rota, limpiarla primero
                         if (_secondConnection != null)
                         {
-                            try
-                            {
-                                System.Diagnostics.Debug.WriteLine(
-                                    $"[ReadOnlyUnitOfWork] ⚠️ Conexión SECOND en estado {_secondConnection.State}, recreando...");
-                                _secondConnection.Close();
-                                _secondConnection.Dispose();
-                            }
-                            catch { }
+                            try { _secondConnection.Close(); _secondConnection.Dispose(); } catch { }
                             _secondConnection = null;
                         }
 
-                        _secondConnection = OpenConnectionWithRetry(
-                            _secondConnectionString,
-                            "SECOND",
-                            maxRetries: 3);
+                        _secondConnection = OpenConnectionWithRetry(_secondConnectionString, "SECOND", maxRetries: 3);
                     }
                     else if (_secondConnection.State == ConnectionState.Connecting ||
                              _secondConnection.State == ConnectionState.Executing ||
                              _secondConnection.State == ConnectionState.Fetching)
                     {
-                        // Esperar un poco si está ocupada
                         System.Threading.Thread.Sleep(100);
                     }
 
@@ -158,9 +132,7 @@ namespace VelsatMobile.Data.Repositories
             int maxRetries = 3)
         {
             if (string.IsNullOrWhiteSpace(connectionString))
-            {
                 throw new ArgumentException($"Connection string para {connectionName} es null o vacío");
-            }
 
             Exception lastException = null;
             int attempt = 0;
@@ -177,33 +149,19 @@ namespace VelsatMobile.Data.Repositories
                         $"[ReadOnlyUnitOfWork] 🔄 Intentando conexión {connectionName} (intento {attempt}/{maxRetries})");
 
                     connection = new MySqlConnection(connectionString);
-
-                    // ✅ CRÍTICO: Validar que la conexión no sea null
-                    if (connection == null)
-                    {
-                        throw new InvalidOperationException($"MySqlConnection para {connectionName} es null");
-                    }
-
-                    // Abrir la conexión
                     connection.Open();
 
-                    // ✅ CRÍTICO: Verificar que realmente se abrió
                     if (connection.State != ConnectionState.Open)
-                    {
                         throw new InvalidOperationException(
                             $"Conexión {connectionName} en estado {connection.State}, esperaba Open");
-                    }
 
-                    // ✅ CRÍTICO: Test de conectividad + configurar charset
                     using (var cmd = new MySqlCommand("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci; SELECT 1", connection))
                     {
                         cmd.CommandTimeout = 5;
                         var result = cmd.ExecuteScalar();
 
                         if (result == null || Convert.ToInt32(result) != 1)
-                        {
                             throw new InvalidOperationException($"Test de conexión {connectionName} falló");
-                        }
                     }
 
                     System.Diagnostics.Debug.WriteLine(
@@ -216,113 +174,50 @@ namespace VelsatMobile.Data.Repositories
                 catch (MySqlException mysqlEx)
                 {
                     lastException = mysqlEx;
+                    try { connection?.Close(); connection?.Dispose(); } catch { }
 
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[ReadOnlyUnitOfWork] ⚠️ MySqlException en {connectionName} " +
-                        $"(intento {attempt}/{maxRetries}): [{mysqlEx.Number}] {mysqlEx.Message}");
+                    bool shouldRetry = mysqlEx.Number == 1042 ||
+                                      mysqlEx.Number == 1053 ||
+                                      mysqlEx.Number == 1129 ||
+                                      mysqlEx.Number == 2003 ||
+                                      mysqlEx.Number == 2006 ||
+                                      mysqlEx.Number == 2013;
 
-                    // Limpiar conexión fallida
-                    try
-                    {
-                        connection?.Close();
-                        connection?.Dispose();
-                    }
-                    catch { }
-
-                    // Errores que justifican reintentar
-                    bool shouldRetry = mysqlEx.Number == 1042 || // Unable to connect
-                                      mysqlEx.Number == 1053 || // Server shutdown in progress
-                                      mysqlEx.Number == 1129 || // Host blocked
-                                      mysqlEx.Number == 2003 || // Can't connect to MySQL server
-                                      mysqlEx.Number == 2006 || // MySQL server has gone away
-                                      mysqlEx.Number == 2013;   // Lost connection during query
-
-                    if (!shouldRetry || attempt >= maxRetries)
-                    {
-                        // No reintentar estos errores o ya alcanzamos max intentos
-                        break;
-                    }
+                    if (!shouldRetry || attempt >= maxRetries) break;
                 }
                 catch (ArgumentException argEx) when (argEx.Message.Contains("An item with the same key has already been added"))
                 {
                     lastException = argEx;
-
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[ReadOnlyUnitOfWork] ⚠️ Pool collision en {connectionName} (intento {attempt}/{maxRetries})");
-
-                    // Limpiar conexión fallida
-                    try
-                    {
-                        connection?.Close();
-                        connection?.Dispose();
-                    }
-                    catch { }
+                    try { connection?.Close(); connection?.Dispose(); } catch { }
                 }
                 catch (NullReferenceException nullEx)
                 {
                     lastException = nullEx;
-
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[ReadOnlyUnitOfWork] ❌ NullReferenceException en {connectionName} " +
-                        $"(intento {attempt}/{maxRetries}): {nullEx.Message}");
-
-                    // Limpiar conexión fallida
-                    try
-                    {
-                        connection?.Close();
-                        connection?.Dispose();
-                    }
-                    catch { }
+                    try { connection?.Close(); connection?.Dispose(); } catch { }
                 }
                 catch (Exception ex)
                 {
                     lastException = ex;
-
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[ReadOnlyUnitOfWork] ❌ Error inesperado en {connectionName}: {ex.GetType().Name} - {ex.Message}");
-
-                    // Limpiar conexión fallida
-                    try
-                    {
-                        connection?.Close();
-                        connection?.Dispose();
-                    }
-                    catch { }
+                    try { connection?.Close(); connection?.Dispose(); } catch { }
                 }
 
-                // Si no es el último intento, hacer backoff y limpiar pool
                 if (attempt < maxRetries)
                 {
-                    // Backoff: 500ms, 1000ms, 1500ms
                     int delayMs = 500 * attempt;
-
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[ReadOnlyUnitOfWork] ⏳ Esperando {delayMs}ms antes de reintentar {connectionName}...");
-
                     System.Threading.Thread.Sleep(delayMs);
 
-                    // ✅ CRÍTICO: Limpiar TODOS los pools antes de reintentar
                     try
                     {
                         MySqlConnection.ClearAllPools();
-                        System.Diagnostics.Debug.WriteLine(
-                            $"[ReadOnlyUnitOfWork] 🧹 Pools limpiados antes de reintentar {connectionName}");
                     }
-                    catch (Exception clearEx)
-                    {
-                        System.Diagnostics.Debug.WriteLine(
-                            $"[ReadOnlyUnitOfWork] ⚠️ Error limpiando pools: {clearEx.Message}");
-                    }
+                    catch { }
                 }
             }
 
-            // Si llegamos aquí, fallaron todos los intentos
-            var errorMsg = $"❌ No se pudo abrir conexión {connectionName} después de {maxRetries} intentos. " +
-                          $"Último error: {lastException?.GetType().Name} - {lastException?.Message}";
-
-            System.Diagnostics.Debug.WriteLine($"[ReadOnlyUnitOfWork] {errorMsg}");
-
-            throw new InvalidOperationException(errorMsg, lastException);
+            throw new InvalidOperationException(
+                $"❌ No se pudo abrir conexión {connectionName} después de {maxRetries} intentos. " +
+                $"Último error: {lastException?.GetType().Name} - {lastException?.Message}",
+                lastException);
         }
 
         public void Dispose()
@@ -336,18 +231,15 @@ namespace VelsatMobile.Data.Repositories
                 {
                     System.Diagnostics.Debug.WriteLine("[ReadOnlyUnitOfWork] 🧹 Disposing...");
 
-                    // Cerrar conexión DEFAULT
+                    // ✅ CORREGIDO: Cerrar AMBAS conexiones
                     if (_defaultConnection != null)
                     {
                         try
                         {
                             var connectionId = _defaultConnection.ServerThread;
-
                             if (_defaultConnection.State == ConnectionState.Open)
                                 _defaultConnection.Close();
-
                             _defaultConnection.Dispose();
-
                             System.Diagnostics.Debug.WriteLine(
                                 $"[ReadOnlyUnitOfWork] ✅ Conexión DEFAULT {connectionId} cerrada");
                         }
@@ -355,6 +247,25 @@ namespace VelsatMobile.Data.Repositories
                         {
                             System.Diagnostics.Debug.WriteLine(
                                 $"[ReadOnlyUnitOfWork] ⚠️ Error cerrando DEFAULT: {ex.Message}");
+                        }
+                    }
+
+                    // ✅ CORREGIDO: Segunda conexión también se cierra correctamente
+                    if (_secondConnection != null)
+                    {
+                        try
+                        {
+                            var connectionId = _secondConnection.ServerThread;
+                            if (_secondConnection.State == ConnectionState.Open)
+                                _secondConnection.Close();
+                            _secondConnection.Dispose();
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[ReadOnlyUnitOfWork] ✅ Conexión SECOND {connectionId} cerrada");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[ReadOnlyUnitOfWork] ⚠️ Error cerrando SECOND: {ex.Message}");
                         }
                     }
                 }
@@ -366,8 +277,8 @@ namespace VelsatMobile.Data.Repositories
                 finally
                 {
                     _defaultConnection = null;
+                    _secondConnection = null; // ✅ CORREGIDO: También limpiar la segunda
                     _disposed = true;
-
                     System.Diagnostics.Debug.WriteLine("[ReadOnlyUnitOfWork] ✅ Disposed completamente");
                 }
             }
