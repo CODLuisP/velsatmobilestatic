@@ -48,6 +48,7 @@ namespace VelsatMobile.Data.Repositories
 
         Task<IEnumerable<UbiPasajero>> UbiPasajeros(string codservicio);
 
+
         //Rastreo con Celular
         Task<int> InsertarTrama(List<TramaCelular> trama);
 

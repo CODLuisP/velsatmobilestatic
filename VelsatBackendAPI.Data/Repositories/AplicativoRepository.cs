@@ -660,7 +660,7 @@ namespace VelsatMobile.Data.Repositories
             }
 
             // 2. Buscar tablas históricas que contengan datos en el rango de fechas
-            const string sqlHistoricos = "SELECT tabla FROM historicos WHERE timeini <= @Fechafin AND timefin >= @Fechaini";
+            const string sqlHistoricos = "SELECT tabla FROM historicos WHERE fecini <= @Fechafin AND fecfin >= @Fechaini";
 
             var nombresTablas = (await _defaultConnection.QueryAsync<string>(
                 sqlHistoricos,
@@ -712,5 +712,6 @@ namespace VelsatMobile.Data.Repositories
             // 5. Ordenar todos los datos por fecha (por si vienen de múltiples tablas)
             return listaTotalDatos.OrderBy(x => x.Fecha);
         }
+       
     }
 }
