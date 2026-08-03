@@ -30,5 +30,8 @@ namespace VelsatBackendAPI.Model
         public string? Nombres { get; set; }
         public string? Login { get; set; }
 
+        //Conductor de turismo: permite a la app buscar sus servicios en servturismo por brevete.
+        public string? Brevete { get; set; }
+
     }
 }

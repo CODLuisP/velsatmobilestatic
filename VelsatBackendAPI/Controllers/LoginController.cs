@@ -31,8 +31,8 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("Los campos están vacíos");
             }
 
-            // Validar que el tipo sea válido
-            if (request.Tipo != 'n' && request.Tipo != 'c' && request.Tipo != 'p' && request.Tipo != 'r')
+            // Validar que el tipo sea válido ('t' = conductor de turismo, tabla taxi con turismo = '1')
+            if (request.Tipo != 'n' && request.Tipo != 'c' && request.Tipo != 'p' && request.Tipo != 'r' && request.Tipo != 't')
             {
                 return BadRequest("Tipo de usuario no válido");
             }
@@ -52,6 +52,7 @@ namespace VelsatBackendAPI.Controllers
                         AccountID = account.AccountID,
                         Description = account.Description,
                         Codigo = account.Codigo,
+                        Brevete = account.Brevete,
                     }
                 });
             }

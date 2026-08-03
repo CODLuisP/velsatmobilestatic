@@ -31,9 +31,9 @@ namespace VelsatBackendAPI.Data.Repositories
                     FROM cliente 
                     WHERE codlan = @AccountID",
 
-                'c' or 'r' => @"
-                    SELECT apellidos, nombres, dni, telefono, login 
-                    FROM taxi 
+                'c' or 'r' or 't' => @"
+                    SELECT apellidos, nombres, dni, telefono, login
+                    FROM taxi
                     WHERE login = @AccountID",
 
                 _ => throw new ArgumentException("Tipo de usuario no válido", nameof(tipo))
@@ -60,8 +60,8 @@ namespace VelsatBackendAPI.Data.Repositories
                     SET apellidos = @Apellidos, codlan = @Codlan, telefono = @Telefono 
                     WHERE codlan = @AccountID",
 
-                'c' => @"
-                    UPDATE taxi 
+                'c' or 't' => @"
+                    UPDATE taxi
                     SET apellidos = @Apellidos, login = @Login, telefono = @Telefono, nombres = NULL
                     WHERE login = @AccountID",
 
@@ -95,7 +95,7 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 'n' => @"UPDATE usuarios SET password = @Password WHERE accountID = @AccountID",
                 'p' => @"UPDATE cliente SET clave = @Clave WHERE codlan = @AccountID",
-                'c' => @"UPDATE taxi SET clave = @Clave WHERE login = @AccountID",
+                'c' or 't' => @"UPDATE taxi SET clave = @Clave WHERE login = @AccountID",
                 _ => throw new ArgumentException("Tipo de usuario no válido", nameof(tipo))
             };
 
@@ -131,10 +131,19 @@ namespace VelsatBackendAPI.Data.Repositories
                     WHERE codlan = @Login AND clave = @Clave AND estadocuenta = 'A'",
 
                 'c' or 'r' => @"
-                    SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password, 
-                           CONCAT(apellidos, ' ', nombres) AS Description 
-                    FROM taxi 
+                    SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password,
+                           CONCAT(apellidos, ' ', nombres) AS Description
+                    FROM taxi
                     WHERE login = @Login AND clave = @Clave AND estado = 'A'",
+
+                // Conductor de turismo: se filtra por turismo = '1' en vez de estado = 'A', ya que los
+                // conductores creados desde ServTurismo no completan la columna "estado".
+                // CONCAT_WS evita que el resultado quede NULL cuando "nombres" no fue cargado.
+                't' => @"
+                    SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password,
+                           CONCAT_WS(' ', apellidos, nombres) AS Description, brevete AS Brevete
+                    FROM taxi
+                    WHERE login = @Login AND clave = @Clave AND turismo = '1'",
 
                 _ => throw new ArgumentException("Tipo de usuario no válido", nameof(tipo))
             };
