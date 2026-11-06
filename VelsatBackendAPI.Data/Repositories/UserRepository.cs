@@ -115,13 +115,21 @@ namespace VelsatBackendAPI.Data.Repositories
             return rowsAffected > 0;
         }
 
+        // Tipos de usuario:
+        //   N = usuario normal          (usuarios)
+        //   C = usuario conductor       (taxi)
+        //   P = usuario pasajero        (cliente)
+        //   R = usuario Mitsubishi      (taxi)
+        //   T = conductor de turismo    (taxi, turismo = '1')
+        //   U = conductor de rutas      (taxi)
+        //   M = pasajero de rutas       (usuarios, usuario normal)
         public async Task<Account> ValidateUser(string login, string clave, char tipo)
         {
             string sql = tipo switch
             {
-                'n' => @"
-                    SELECT accountID, password, description 
-                    FROM usuarios 
+                'n' or 'm' => @"
+                    SELECT accountID, password, description
+                    FROM usuarios
                     WHERE accountID = @Login AND password = @Clave",
 
                 'p' => @"
@@ -130,7 +138,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     FROM cliente 
                     WHERE codlan = @Login AND clave = @Clave AND estadocuenta = 'A'",
 
-                'c' or 'r' => @"
+                'c' or 'r' or 'u' => @"
                     SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password,
                            CONCAT(apellidos, ' ', nombres) AS Description
                     FROM taxi

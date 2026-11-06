@@ -31,8 +31,16 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("Los campos están vacíos");
             }
 
-            // Validar que el tipo sea válido ('t' = conductor de turismo, tabla taxi con turismo = '1')
-            if (request.Tipo != 'n' && request.Tipo != 'c' && request.Tipo != 'p' && request.Tipo != 'r' && request.Tipo != 't')
+            // Tipos de usuario:
+            //   N = usuario normal                (tabla usuarios)
+            //   C = usuario conductor             (tabla taxi)
+            //   P = usuario pasajero              (tabla cliente)
+            //   R = usuario Mitsubishi            (tabla taxi)
+            //   T = conductor de turismo          (tabla taxi, turismo = '1')
+            //   U = conductor de rutas            (tabla taxi)
+            //   M = pasajero de rutas             (tabla usuarios, usuario normal)
+            if (request.Tipo != 'n' && request.Tipo != 'c' && request.Tipo != 'p' && request.Tipo != 'r' && request.Tipo != 't'
+                && request.Tipo != 'u' && request.Tipo != 'm')
             {
                 return BadRequest("Tipo de usuario no válido");
             }
