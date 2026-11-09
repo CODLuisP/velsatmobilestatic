@@ -138,9 +138,16 @@ namespace VelsatBackendAPI.Data.Repositories
                     FROM cliente 
                     WHERE codlan = @Login AND clave = @Clave AND estadocuenta = 'A'",
 
-                'c' or 'r' or 'u' => @"
+                'c' or 'r' => @"
                     SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password,
                            CONCAT(apellidos, ' ', nombres) AS Description
+                    FROM taxi
+                    WHERE login = @Login AND clave = @Clave AND estado = 'A'",
+
+                // Conductor de rutas: igual que C/R pero devuelve el brevete.
+                'u' => @"
+                    SELECT codtaxi AS Codigo, login AS AccountID, clave AS Password,
+                           CONCAT(apellidos, ' ', nombres) AS Description, brevete AS Brevete
                     FROM taxi
                     WHERE login = @Login AND clave = @Clave AND estado = 'A'",
 
