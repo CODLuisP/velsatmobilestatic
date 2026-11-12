@@ -127,12 +127,12 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             string sql = tipo switch
             {
-                'n' or 'm' => @"
+                'n' => @"
                     SELECT accountID, password, description
                     FROM usuarios
                     WHERE accountID = @Login AND password = @Clave",
 
-                'p' => @"
+                'p' or 'm' => @"
                     SELECT codcliente AS Codigo, codlan AS AccountID, clave AS Password, 
                            apellidos AS Description 
                     FROM cliente 
